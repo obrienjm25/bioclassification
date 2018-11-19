@@ -1,7 +1,5 @@
 ##Code to create shapefiles outlining study areas within DFO regions and adjacent land borders
 
-setwd("E:/Biological Classification")
-
 library(rgeos)
 library(rgdal)
 library(raster)

@@ -1,5 +1,3 @@
-setwd("E:/Biological Classification")
-
 #load packages
 pkgs <- list("rgdal", "sp", "ggplot2", "grid", "gridExtra", "gtable")
 invisible(lapply(pkgs, library, character.only = T))
@@ -84,7 +82,7 @@ g2 <- ggplotGrob(p2)
 g <- rbind(g1, g2, size = "first")
 g$widths <- unit.pmax(g1$widths, g2$widths)
 
-tiff('E:/Biological Classification/Output/GridSelection_Maritimes.tiff', height = 664, width = 780, units = 'px')
+tiff('Output/GridSelection_Maritimes.tiff', height = 664, width = 780, units = 'px')
 grid.newpage()
 grid.draw(g)
 dev.off()

@@ -1,7 +1,5 @@
 ## Code to make a grid layer to group survey point observations
 
-setwd("E:/Biological Classification")
-
 source("Code/GridFilter2.R")
 
 library(rgeos)
