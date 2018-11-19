@@ -166,16 +166,15 @@ plot(colorsgrid, col = as.character(colorsgrid$assigned), border = NA,add=T)
 plot(Land, col = 'beige', add = T)
 dev.off()
 
-#write
-writeSpatialShape(colorsgrid, "Combined_2015.04.30/3.Cluster_04.30_GfBioTanCrabClam_RemCoast_NSBWCVI/0.55/Coloredgrid_0.55_NSB_WCVI_2015_05_07.shp")
+#write shapefile with cluster and color assignment attributes for 4 km subgrid
+writeSpatialShape(colorsgrid, "Data/GridClusterAssignment4km_Maritimes.shp")
 
-#Get lat long for each Grid record
-head(bdata1)		
-bdata1$GridID<-rownames(bdata1)
-bdata2<-merge(bdata1, colorGridData, by="GridID")		
-head(bdata2)		
-write.csv(bdata2,"Combined_2015.04.30/3.Cluster_04.30_GfBioTanCrabClam_RemCoast_NSBWCVI/pa_matrix_3615sitesx174sp_withLatLongx.csv" )		
-write.csv(bdata2[names(bdata2) %in% c("cl","SP_ID","Id","MidLat"  ,"MidLong" ,"Freq" ,"assigned"), "Combined_2015.04.30/3.Cluster_04.30_GfBioTanCrabClam_RemCoast_NSBWCVI/0.65/Coloredgrid_cluster_assignment_2015.05.07.csv"
+#write csv file for SiteXSpecies matriz with cluster and color assignments
+SiteXSpecies2 <- SiteXSpecies
+SiteXSpecies2$id<-rownames(SiteXSpecies2)
+SiteXSpecies_ClustAssigned<-merge(SiteXSpecies2, colorGridData, by="id")		
+head(SiteXSpecies_ClustAssigned)		
+write.csv(SiteXSpecies_ClustAssigned[,c(-117,-118)], "Data/Coloredgrid4km_cluster_assignment_Maritimes.csv")
 
 
 ###Move  on to indicator species analysis
