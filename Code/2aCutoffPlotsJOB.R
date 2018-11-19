@@ -16,7 +16,6 @@
 pkgs <- list('vegan', 'simba', 'maptools', 'pvclust', 'dendroextras', 'dendextend', 'reshape', 'reshape2', 'dplyr', 'tidyr', 'NbClust')
 invisible(lapply(pkgs, library, character.only = T))
 
-setwd("E:/Biological Classification")
 benthtree<-readRDS("Data/benthtree4km.rds")
 SiteXSpecies<-read.csv("Data/ClusterData4km.csv", stringsAsFactors = F, row.names = 1)
 
