@@ -115,9 +115,9 @@ colorcount2$cl<-as.character(colorcount2$cl)
 colorcount2$Freq<-as.numeric(colorcount2$Freq)
 colorcount2<-colorcount2[order(-colorcount2$Freq),] #order by frequency
 colorcount2$Freq<-as.character(colorcount2$Freq) 
-new<-c("others", paste("<", setfreq), "grey") #add a column for the other clusters (less than top 6 - color them grey)
-
+new<-c("others", paste("<", setfreq), "#e0e0e0") #add a column for the other clusters (less than top 6 - color them grey)
 legendcluster<-rbind(colorcount2, new)
+legendcluster$cl_name <- c("WSS/Outer BoF","WSS: Banks/Inner BoF","ESS","ESS: Banks","Laurentian Channel/Shelf Break","Slope","Other") 
 legendcluster #legend
 
 #Print dendrogram
@@ -151,6 +151,10 @@ colorGridData<-colorsgrid@data
 
 #set coordinate system and project
 proj4string(colorsgrid)<-CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0") #set coordinate reference system
+#write shapefile with cluster and color assignment attributes for 4 km subgrid
+writeOGR(colorsgrid, dsn = 'Data/Shapefiles', layer = 'GridClusterAssignment4km_Maritimes', driver = "ESRI Shapefile")
+
+#Mapping shapefiles
 MaritimeRegion <- readOGR("Data/MaritimesPlanningRegion/MaritimesPlanningArea.shp")
 MaritimeProj <- spTransform(MaritimeRegion,CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
 RVSurvey <- readOGR("Data/Shapefiles/MaritimesStudyArea.shp")
@@ -159,15 +163,42 @@ Land <- readOGR("Data/Shapefiles/LandBordersMaritimes.shp")
 #adjust legend for map
 legendmap<-legendcluster
 
-#Plot map
+#Plot map in projected coordinate system
 tiff("Output/ColourGrid_Maritimes4km.tiff", res=300, height=3000, width=2400)
 plot(RVSurvey, col = 'gray97')
 plot(colorsgrid, col = as.character(colorsgrid$assigned), border = NA,add=T)
 plot(Land, col = 'beige', add = T)
 dev.off()
 
-#write shapefile with cluster and color assignment attributes for 4 km subgrid
-writeSpatialShape(colorsgrid, "Data/GridClusterAssignment4km_Maritimes.shp")
+#plot map unprojected
+
+library(raster)
+colorsgrid.Proj <- spTransform(colorsgrid, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+RVsurvey.Proj <- spTransform(RVSurvey, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))                              
+MaritimesProj2 <- spTransform(MaritimeRegion, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+Land.Proj <- spTransform(Land, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+Land.Proj <- crop(Land.Proj, extent(c(-68.25,-54.5,39.25,48.6)))
+canada <- raster::getData("GADM", country = "CAN", level = 1)
+QC.NFLD.PEI <- c("Newfoundland and Labrador", "Prince Edward Island", "Qu\u{e9}bec")
+canada <- canada[canada$NAME_1 %in% QC.NFLD.PEI,]
+canada <- crop(canada, extent(c(-68.25,-54.5,39.25,48.6)))
+
+library(prettymapr)
+par(mar = c(4,5,1,1), usr = c(-68.25,-54.5,39.25,48.6), xpd = NA)
+plot(MaritimesProj2, border = NA)
+plot(RVsurvey.Proj, add = T)
+axis(1,at = c(-68,-64,-60,-56), pos = 39.25, tick = T,
+     labels = c(expression(paste("68",degree," W",sep='')),expression(paste("64",degree," W",sep='')),expression(paste("60",degree," W",sep='')),expression(paste("56",degree," W",sep=''))))
+axis(2,at = c(40,42,44,46,48), pos = -68.25, tick = T,
+     labels = c(expression(paste("40",degree," N",sep='')),expression(paste("42",degree," N",sep='')),expression(paste("44",degree," N",sep='')),expression(paste("46",degree," N",sep='')),expression(paste("48",degree," N",sep=''))))
+plot(colorsgrid.Proj, col = as.character(colorsgrid.Proj$assigned), border = NA,add=T)
+plot(canada, col = 'gray97', border = 'gray10', add = T)
+plot(Land.Proj, col = 'gray97', border = 'gray10', add = T)
+plot(extent(-68.25,-54.5,39.25,48.6), add = T)
+addnortharrow(pos = 'bottomleft', scale = 0.35)
+addscalebar(pos = 'bottomright', htin =0.1,widthhint=0.3)
+legend(x = -61.8, y = 42.6, legend = legendmap$cl_name,
+       fill = as.character(legendmap$assigned),  bty = "n", cex = 0.85)
 
 #write csv file for SiteXSpecies matriz with cluster and color assignments
 SiteXSpecies2 <- SiteXSpecies
