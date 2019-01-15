@@ -175,7 +175,7 @@ MaritimeGrid@data$freq[is.na(MaritimeGrid@data$freq)] = 0
 ####Examine allocation and distribution of sets among grids
 
 #Histogram
-hist(NumGrid$Frequency, main = 'Allocation of sets among grid cells', xlab = 'Sets per grid')
+hist(NumGrid$Frequency, main = 'Allocation of sets among grid cells', xlab = 'Sets per grid', col = 'grey90')
 abline(v = mean(NumGrid$Frequency), col = 'red', lwd = 2)
 abline(v = median(NumGrid$Frequency), col = 'blue', lwd = 2, lty = 2)
 
