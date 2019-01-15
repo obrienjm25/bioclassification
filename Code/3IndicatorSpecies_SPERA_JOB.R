@@ -35,11 +35,11 @@ colorGridData_top6$cl2[colorGridData_top6$cl==2]<-5
 colorGridData_top6$cl2[colorGridData_top6$cl==1]<-6
 
 #Provide a name to each cluster associated with broad geomorphic features
-colorGridData_top6$ecoregion[colorGridData_top6$cl==12]<- "South Shelf/BoF: Other" 
-colorGridData_top6$ecoregion[colorGridData_top6$cl==13]<- "South Shelf/BoF: Banks"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==4]<- "North Shelf: Banks"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==3]<- "North Shelf: Troughs"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==2]<- "Laurentian Channel"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==12]<- "WSS/BoF" 
+colorGridData_top6$ecoregion[colorGridData_top6$cl==13]<- "WSS/BoF: Banks"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==4]<- "ESS: Banks"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==3]<- "ESS"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==2]<- "Laurentian Channel/Shelf break"
 colorGridData_top6$ecogregion[colorGridData_top6$cl==1]<- "Slope"
 
 colorGridData_top6$cl2<-as.factor(colorGridData_top6$cl2)
@@ -59,6 +59,8 @@ maxcls<-indicators2$maxcls #get cluster with max indval for that species
 pval<-indicators2$pval #get pvalue
 indval<-indicators2$indval #get indicator species value
 indmax <- indicators2$indcls #get indVal for species in its maximum class
+maxfreq <- pmax(relfreq[1], relfreq[2],relfreq[3],relfreq[4],relfreq[5],relfreq[6]) # gives relative frequency for species in its max class
+names(maxfreq) <- "maxfreq"
 
 names1<-c(paste("freq_", c("1_S_Shelf_BoF","2_S_Shelf_BoF_Banks",
                            "3_N_Shelf_Banks", "4_N_Shelf_Troughs", 
@@ -74,7 +76,7 @@ names(relabund)<-names2
 names(indval)<-names3
 
 #Combine relative frequency, abundance, indicator value, cluster with max indVal and pval into 1 df
-combine<-as.data.frame(cbind(maxcls,pval,relfreq, relabund,indval, indmax))
+combine<-as.data.frame(cbind(maxcls,pval,relfreq, relabund,indval, indmax, maxfreq))
 combine$species<-rownames(combine) #Create species name column
 head(combine)
 
@@ -83,6 +85,22 @@ combine <- combine %>%
   dplyr::filter(.,pval<=0.05) %>% 
   dplyr::filter(.,indmax >= 0.25) 
 combine<-combine[order(combine$maxcls, -combine$indmax),] #group by cluster
-combine$species<-gsub("."," ",combine$species)
+combine$species<-gsub("[.]"," ",combine$species)
+
+#Get common names for indicator species
+
+load("Data/MaritimesData.RData")
+SpeciesIndex <- Maritimes %>% dplyr::select(species, common_name) %>% distinct()
+
+for (i in 1:length(combine$species)){
+  combine$Common_name[i] <- SpeciesIndex[grep(combine$species[i],SpeciesIndex$species),2]
+}
+
+IndicatorTable <- combine %>% dplyr::select(maxcls,species,Common_name,maxfreq,indmax)
+IndicatorTable$indmax <- round(IndicatorTable$indmax,3)
+IndicatorTable$maxfreq <- round((IndicatorTable$maxfreq*100),1)
+colnames(IndicatorTable) <- c("Ecoregion","Species","Common name", "Relative Frequency (%)","IndVal")
+write.table(IndicatorTable, file = "Output/IndicatorSpecies_Maritimes.txt",
+            row.names = F, sep = ",", qmethod = "escape")
 
 #On to Random Forest Modeling
