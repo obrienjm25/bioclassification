@@ -13,20 +13,45 @@
 ## Adapted code for Biological classification analysis - Eastern Canadian groundfish - Stanley, Heaslip, Jeffery, O'Brien
 #########################################
 
-pkgs <- list('vegan', 'simba', 'maptools', 'pvclust', 'dendroextras', 'dendextend', 'reshape', 'reshape2', 'dplyr', 'tidyr', 'NbClust')
+pkgs <- list('vegan', 'simba', 'maptools', 'pvclust', 'dendroextras', 'dendextend', 'reshape', 'reshape2', 'dplyr', 'tidyr', 'NbClust','ggplot2')
 invisible(lapply(pkgs, library, character.only = T))
 
 benthtree<-readRDS("Data/benthtree4km.rds")
 SiteXSpecies<-read.csv("Data/ClusterData4km.csv", stringsAsFactors = F, row.names = 1)
 
-#Examine internal cluster validity index (S_Dbw) as a function of cluster size
-
+#Examine internal cluster validity index, S_Dbw (Halkidi and Vazirgiannis 2001), as a function of cluster size
+#best cluster number is min value of index
 grid.pa.simp<-sim(SiteXSpecies,  method='simpson')
 ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, method = 'average',
                       index = "sdbw", min.nc = 2, max.nc = 18)
 ClustValid$Best.nc #14 clusters is best
-plot(seq(2,18, by = 1),ClustValid$All.index, xlab = 'Number of clusters', ylab = 'S_Dbw index') #But anywhere from 8-18 with similar index value
 
+ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
+p.SDbw <- ggplot(ClustValid.df) +
+  geom_point(aes(x = NC, y = Index)) +
+  labs(x = 'Number of cluster', y = 'S_Dbw index') +
+  geom_point(aes(x = NC[Index == min(Index)], y = min(Index), col = 'red')) +
+  guides(colour = 'none') +
+  theme_bw(); p.SDbw
+
+#Compare with different internal cluster validity index - CH index (Calinski and Harabasz 1974)
+#best cluster number is max value of index
+
+ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, method = 'average',
+                      index = "ch", min.nc = 2, max.nc = 18)
+ClustValid$Best.nc #appear to be 3 sequential and progressively smaller peaks (Nested clusters?)
+
+ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
+p.CH <- ggplot(ClustValid.df) +
+  geom_point(aes(x = NC, y = Index)) +
+  labs(x = 'Number of cluster', y = 'CH index') +
+  geom_point(aes(x = NC[14], y = Index[14], col = 'red')) +
+  guides(colour = 'none') +
+  theme_bw(); p.CH
+
+library(gridExtra)
+
+grid.arrange(p.SDbw, p.CH)
 
 #Pinpoint cut-off value by examining number of sites assigned to top clusters and evenness among clusters
 #as a function of dissimilarity
