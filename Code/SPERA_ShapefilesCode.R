@@ -27,3 +27,13 @@ strataProj <- spTransform(strata,CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +
 MaritimesStudyArea <- aggregate(cover(MaritimeProj, strataProj))
 MaritimesStudyArea <- SpatialPolygonsDataFrame(MaritimesStudyArea, data.frame(Name = "Maritimes RV survey area", Area = NA))
 writeOGR(MaritimesStudyArea, dsn = "Data/Shapefiles", layer = "MaritimesStudyArea", driver = "ESRI Shapefile")
+
+#Get land boundaries of provinces bordering Newfoundland region
+canada <- raster::getData("GADM", country = 'CAN', level = 1)
+spm <- raster::getData("GADM", country = 'SPM', level = 1)
+prov <- c("Newfoundland and Labrador", "Prince Edward Island", "Qu\u{e9}bec", "Nova Scotia", "New Brunswick")
+NLregion <- canada[canada$NAME_1 %in% prov,]
+NLregion <- rbind(NLregion,spm)
+RVstrataNLlonlat <- readOGR('Data/Shapefiles/NF_SamplingStrata_20140514.shp')
+NLregion <- crop(canada, extent(RVstrataNLlonlat))
+writeOGR(NLregion, dsn = 'Data/Shapefiles', layer = 'NL_landborders', driver = 'ESRI Shapefile')
