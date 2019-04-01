@@ -11,7 +11,7 @@ VoronoiResample <- function(shpth, raspth, inpFile,
   NWA_pts <- readOGR(paste(shpth,inpFile,sep='')) #read in pt shapefile
   summary_stats <- colnames(NWA_pts@data)
   SA_pts <- crop(NWA_pts, ext) #crop pts to extent
-  SA_pts <- spTransform(SA_pts, proj4string(SApoly)) #reproject to cartesian projeciton of study area
+  SA_pts <- spTransform(SA_pts, proj4string(SApoly)) #reproject to cartesian projection of study area
   vor_SA <- voronoipolygons(SA_pts) # create voronoi polygons for each point
   proj4string(vor_SA) <- proj4string(SApoly)
 
