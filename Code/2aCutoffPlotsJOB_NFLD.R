@@ -24,7 +24,7 @@ SiteXSpecies<-read.csv("Data/ClusterData4km_Nfld.csv", stringsAsFactors = F, row
 grid.pa.simp<-sim(SiteXSpecies,  method='simpson')
 ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, method = 'average',
                       index = "sdbw", min.nc = 2, max.nc = 18)
-ClustValid$Best.nc #16 clusters is best, but anywhere 12+ with similar value
+ClustValid$Best.nc #14 clusters is best, but anywhere 11+ with similar value
 
 ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
 p.SDbw <- ggplot(ClustValid.df) +
@@ -41,7 +41,7 @@ ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL,
                       index = "ch", min.nc = 2, max.nc = 18)
 ClustValid$Best.nc #2 clusters best
 
-#appear to be 3-4 sequential and progressively smaller peaks (Nested clusters?)
+#appear to be 3 sequential and progressively smaller peaks (Nested clusters?)
 ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
 p.CH <- ggplot(ClustValid.df) +
   geom_point(aes(x = NC, y = Index)) +
@@ -100,7 +100,7 @@ table<-cbind.data.frame(s/100, unlist(ncells1),unlist(ncells2),unlist(ncells3),u
 colnames(table)<-c("distance_Bsim", "ncells_top_1","ncells_top_2","ncells_top_3","ncells_top_4","ncells_top_5","ncells_top_6","ncells_top_7","ncells_top_8","ncells_top_9","ncells_top_10","Number_of_Clusters")
 
 head(table) #number of sites in top cluster, 2nd top cluster, 3rd top cluster etc
-table$distance_Bsim[table$Number_of_Clusters>=7 & table$Number_of_Clusters<=18] #Look for cut-off between 0.425-0.563
+table$distance_Bsim[table$Number_of_Clusters>=8 & table$Number_of_Clusters<=18] #Look for cut-off between 0.455-0.512
 
 tablea<-table[,c(-1,-12)]
 tablea$SD <- apply(tablea,1, sd, na.rm = TRUE)
@@ -112,15 +112,16 @@ tablea$Bsim100<-tablea$Bsim*100
 
 #Exploratory plots
 
-cutoff1<-0.378
-cutoff2<-0.484
-cutoff3<-0.563
+cutoff1<-0.371
+cutoff2<-0.410
+cutoff3<- 0.494
+cutoff4 <- 0.512
 
 #Plot that shows ratio of assigned sites to variation (SD) in cluster size
 plot(tablea$Bsim,tablea$ratio, type="l", xlab="Bsim", ylab="Ratio of sites in top 10 clusters to cluster size SD")
 minRatio<-subset(tablea, ratio==min(tablea$ratio, na.rm=T))
 points(minRatio$Bsim, minRatio$ratio,col="red")
-abline(v = c(cutoff1, cutoff2, cutoff3))
+abline(v = c(cutoff1, cutoff2, cutoff3, cutoff4))
 
 tableb<-tablea[complete.cases(tablea),]
 plot(tableb$Bsim,tableb$SD, xlab = "Bsim", ylab = "SD of top 10 cluster size") #Plot StDev of cluster size by Bsim cutoff
@@ -147,10 +148,10 @@ ggplot(table2) +
   geom_area(aes(y = value,x = distance_Bsim,fill=variable), color = 'black', position = position_stack(vjust = 0.5, reverse = T), stat="identity", na.rm = T) +  theme_classic()+ 
   scale_fill_grey(start=0.95, end=0.3,labels=c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4", "Cluster 5", "Cluster 6", "Cluster 7", "Cluster 8", "Cluster 9", "Cluster 10"))+
   scale_x_continuous(expression(paste(beta["sim"]," cut-off")),expand = c(0, 0))+
-  scale_y_continuous("Number of sites in each cluster", limits=c(0,3200), expand=c(0,0))+labs(fill="") +
-  geom_segment(aes(x = cutoff2-0.005, y = max(table2$value, na.rm=T), xend = cutoff2-0.005, yend = 0), linetype=2)+
-  geom_segment(aes(x = cutoff2+0.005, y = max(table2$value, na.rm=T), xend = cutoff2+0.005, yend = 0), linetype=2)+
-  geom_segment(aes(x = cutoff2-0.005, y = max(table2$value, na.rm=T), xend = cutoff2+0.005, yend = max(table2$value, na.rm=T)), linetype=2)
+  scale_y_continuous("Number of sites in each cluster", limits=c(0,5000), expand=c(0,0))+labs(fill="") +
+  geom_segment(aes(x = cutoff3-0.005, y = max(table2$value, na.rm=T), xend = cutoff3-0.005, yend = 0), linetype=2)+
+  geom_segment(aes(x = cutoff3+0.005, y = max(table2$value, na.rm=T), xend = cutoff3+0.005, yend = 0), linetype=2)+
+  geom_segment(aes(x = cutoff3-0.005, y = max(table2$value, na.rm=T), xend = cutoff3+0.005, yend = max(table2$value, na.rm=T)), linetype=2)
  dev.off()
 
 ####
@@ -167,9 +168,9 @@ points(tablea$rowsums[tablea$Bsim100>48&tablea$Bsim100<=59],tablea$SD[tablea$Bsi
 points(tablea$rowsums[tablea$Bsim100>58&tablea$Bsim100<=69],tablea$SD[tablea$Bsim100>58&tablea$Bsim100<=69], type="l",  lty=1, lwd=2)
 points(tablea$rowsums[tablea$Bsim100>68&tablea$Bsim100<=78],tablea$SD[tablea$Bsim100>68&tablea$Bsim100<=78], type="l",   lty=3, lwd=2)
 legend("topleft",legend=c((expression(paste(beta["sim"]," cut-off"))),"0.30 to 0.39","0.40 to 0.49","0.50 to 0.59", "0.60 to 0.69","0.70 to 0.78"),lty=c(0,4,1,5,1,3),lwd=c(0,2,1,1.5,2,2), bty="n")
-points(3133,407.0187,col="black", pch=22, cex=3)
+points(4907,608.4691,col="black", pch=22, cex=3)
 # points(tablea$rowsums[tablea$Bsim==cutoff1],tablea$SD[tablea$Bsim==cutoff1],col="black", pch=21, cex=3)
-text(3073,407.0187,col="black", labels=c("0.48"))
+text(4800,608.4691,col="black", labels=c("0.49"))
 # text(tablea$rowsums[tablea$Bsim==cutoff1]-130,tablea$SD[tablea$Bsim==cutoff1]+15,col="black", labels=c("0.37"))
  dev.off()
 
