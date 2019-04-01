@@ -172,15 +172,15 @@ fall <- months[10:12]
 
 #functions to be used to calculate annual summaries
 rowMin <- function(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12,...){
-  min = min(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11))
+  min = min(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12))
   return(min)}
 
 rowMax <- function(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12,...){
-  max = max(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11))
+  max = max(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12))
   return(max)}
 
 rowMax2 <- function(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12,...){
-  max = max(abs(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11)))
+  max = max(abs(c(M_1,M_2,M_3,M_4,M_5,M_6,M_7,M_8,M_9,M_10,M_11,M_12)))
   return(max)} #for variables where +/- indicate direction
 
 #Objects and functions required to convert pt shapefiles of environmental
@@ -194,7 +194,7 @@ extentMar <- extent(-68,-55,41,48)
 MaritimesSA <- readOGR("Data/Shapefiles/MaritimesStudyArea.shp")
 
 #create list, each element containing a list of textfile names for each environmental variable of interest
-#Data provided as monthly predictions for pts on irregular grid extending from SW NS halfway up Labrador (2007-2015) 
+#Data provided as monthly predictions for pts on irregular grid extending from New Jersey to halfway up Labrador (2007-2015) 
 
 bnam.files <- list()
 
