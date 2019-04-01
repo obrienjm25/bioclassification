@@ -15,7 +15,7 @@
 library(labdsv)
 library(dplyr)
 
-####Indicator species analysis on top 3 clusters####
+####Indicator species analysis on top 3 clusters in Quebec region (nGOSL)####
 
 #Import Site by Species matrix with cluster assignments
 colorGridData<-read.csv("Data/Coloredgrid4km_cluster_assignment_QC.csv")
