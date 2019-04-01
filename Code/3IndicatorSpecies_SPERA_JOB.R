@@ -25,22 +25,22 @@ colorGridData<-colorGridData[,-1] #remove superfluous index variable
 top6 <- names(sort(table(colorGridData$cl), decreasing = T))[1:6] #list of top 6 clusters
 
 colorGridData_top6<-colorGridData[colorGridData$cl %in% top6,] #create subset df of top 6 clusters
-PA_data<-colorGridData_top6[,c(-1,-116,-117,-118)] #remove columns to create strictly sitexspecies PA matrix
+PA_data<-colorGridData_top6[,c(-1,-115,-116)] #remove columns to create strictly sitexspecies PA matrix
 
-colorGridData_top6$cl2[colorGridData_top6$cl==12]<-1 #assign top 6 clusters new numeric cluster membership
-colorGridData_top6$cl2[colorGridData_top6$cl==13]<-2 #between 1 and 6 in order of largest to smallest
-colorGridData_top6$cl2[colorGridData_top6$cl==4]<-3
-colorGridData_top6$cl2[colorGridData_top6$cl==3]<-4
-colorGridData_top6$cl2[colorGridData_top6$cl==2]<-5
+colorGridData_top6$cl2[colorGridData_top6$cl==9]<-1 #assign top 6 clusters new numeric cluster membership
+colorGridData_top6$cl2[colorGridData_top6$cl==8]<-2 #between 1 and 6 in order of largest to smallest
+colorGridData_top6$cl2[colorGridData_top6$cl==2]<-3
+colorGridData_top6$cl2[colorGridData_top6$cl==4]<-4
+colorGridData_top6$cl2[colorGridData_top6$cl==5]<-5
 colorGridData_top6$cl2[colorGridData_top6$cl==1]<-6
 
 #Provide a name to each cluster associated with broad geomorphic features
-colorGridData_top6$ecoregion[colorGridData_top6$cl==12]<- "WSS/BoF" 
-colorGridData_top6$ecoregion[colorGridData_top6$cl==13]<- "WSS/BoF: Banks"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==4]<- "ESS: Banks"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==3]<- "ESS"
-colorGridData_top6$ecoregion[colorGridData_top6$cl==2]<- "Laurentian Channel/Shelf break"
-colorGridData_top6$ecogregion[colorGridData_top6$cl==1]<- "Slope"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==9]<- "WSS/BoF" 
+colorGridData_top6$ecoregion[colorGridData_top6$cl==8]<- "WSS/BoF: Banks"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==2]<- "ESS: Banks"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==4]<- "ESS"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==5]<- "Laurentian Channel/Shelf break"
+colorGridData_top6$ecoregion[colorGridData_top6$cl==1]<- "Slope"
 
 colorGridData_top6$cl2<-as.factor(colorGridData_top6$cl2)
 colorGridData_top6$cl2<-droplevels(colorGridData_top6$cl2)
