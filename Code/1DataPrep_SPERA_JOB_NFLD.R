@@ -77,53 +77,46 @@ Nfld$vertical.position <- gsub("pelagic-oceanic", "pelagic,oceanic", Nfld$vertic
 
 BottomHabitats <- c('bathydemersal', 'benthic', 'benthopelagic', 'demersal', 'sessile', 'reef-associated', 'bathypelagic')
 
-NfldFall <- Nfld %>% 
+Nfld <- Nfld %>% 
   filter(Nfld$vertical.position %in% BottomHabitats) %>%
-  filter(year >= 2007) %>%
-  filter(season == 'Fall') #39653 observations
+  filter(year >= 2007) #61473 observations
 
-NfldSpring <- Nfld %>% 
-  filter(Nfld$vertical.position %in% BottomHabitats) %>%
-  filter(year >= 2007) %>%
-  filter(season == 'Spring') #21820
-
-length(unique(NfldFall$common_name)) #85 unique taxa
-length(unique(NfldSpring$common_name)) #82 unique taxa
+length(unique(Nfld$common_name)) #85 unique taxa
 
 #Unique ID that can be used to go from long to wide format, where each row is a sample sation.
-NfldFall$ID <- paste(NfldFall$year,NfldFall$month,NfldFall$day, NfldFall$longitude, NfldFall$latitude, sep="_")
-length(unique(NfldFall$ID)) #3407 unique sets
+Nfld$ID <- paste(Nfld$year,Nfld$month,Nfld$day, Nfld$longitude, Nfld$latitude, sep="_")
+length(unique(Nfld$ID)) #5635 unique sets
 
 #cast to wide format
 
-WideNfldFall_wgt <- dcast(NfldFall[,c("ID","species","totwgt")],ID~species, fun.aggregate = sum)%>%
-  left_join(.,dplyr::select(NfldFall[!duplicated(NfldFall$ID),],ID,latitude,longitude,year,month,day,
+WideNfld_wgt <- dcast(Nfld[,c("ID","species","totwgt")],ID~species, fun.aggregate = sum)%>%
+  left_join(.,dplyr::select(Nfld[!duplicated(Nfld$ID),],ID,latitude,longitude,year,month,day,
                      set,strat,season,vertical.position),by="ID")%>%
-  dplyr::select(.,ID,longitude,latitude,year,month,day,set,strat,season,vertical.position,unique(NfldFall$species))%>%
+  dplyr::select(.,ID,longitude,latitude,year,month,day,set,strat,season,vertical.position,unique(Nfld$species))%>%
   data.frame()
 
-
 ###biotic data to point shapefile - convert to coordinate system that matches the grid
-coordinates(WideNfldFall_wgt)<-~longitude+latitude #tell R what the coordates are
-proj4string(WideNfldFall_wgt)<-CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0") #set coordinate reference system
-Nflddata <- spTransform(WideNfldFall_wgt,CRS("+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
+coordinates(WideNfld_wgt)<-~longitude+latitude #tell R what the coordates are
+proj4string(WideNfld_wgt)<-CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0") #set coordinate reference system
+Nflddata <- spTransform(WideNfld_wgt,CRS("+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
 #writeOGR(Nflddata, dsn = "Data/Shapefiles", layer = 'WideNL_surveydata', driver = 'ESRI Shapefile')
 
+
 #Nfld survey strata boundaries
-#RVstrataNL <- readOGR('Data/Shapefiles/NF_SamplingStrata_20140514.shp')
-#RVstrataNL <- spTransform(RVstrataNL, CRS('+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0'))
+RVstrataNL <- readOGR('Data/Shapefiles/NF_SamplingStrata_20140514.shp')
+RVstrataNL <- spTransform(RVstrataNL, CRS('+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0'))
 #NAFO divisions
-#NAFO <- readOGR("Data/Shapefiles/NAFO_Divisions.shp")
-#proj4string(NAFO) <- CRS('+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0')
-#NAFO <- spTransform(NAFO, CRS('+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0'))
+NAFO <- readOGR("Data/Shapefiles/NAFO_Divisions.shp")
+proj4string(NAFO) <- CRS('+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0')
+NAFO <- spTransform(NAFO, CRS('+proj=utm +zone=21 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0'))
 
 #Examine which NAFO divisions contain survey data
-#plot(Nflddata, cex = 0.1, col = 'red')
-#plot(NAFO, add = T) #Little to no sampling in divisions 2G, 3M, 3Pn, 3Ps
-#rm_list <- factor(c('2G','3M','3Pn','3Ps','0B','4Vn','4Vs','4R'))
-#NAFO_rm <- NAFO[NAFO@data$ZONE %in% rm_list,]
-#NL_SA <- aggregate(RVstrataNL) # aggegrate strata polygons to form boundaries of study area
-#NL_SA <- erase(NL_SA,NAFO_rm)#mask study area polygon with 2G, 3M, 3Pn, 3Ps NAFO divisions
+plot(Nflddata, cex = 0.1, col = 'red')
+plot(NAFO, add = T) #Little to no sampling in divisions 2G, 3M
+rm_list <- factor(c('2G','3M','0B'))
+NAFO_rm <- NAFO[NAFO@data$ZONE %in% rm_list,]
+NL_SA <- aggregate(RVstrataNL) # aggegrate strata polygons to form boundaries of study area
+NL_SA <- erase(NL_SA,NAFO_rm)#mask study area polygon with 2G, 3M NAFO divisions
 #writeOGR(as(NL_SA, 'SpatialPolygonsDataFrame'), dsn = 'Data/Shapefiles', layer = 'NL_RVsurveyAgg', driver = 'ESRI Shapefile')
 
 #load polygon for Nfld study area
@@ -133,13 +126,13 @@ NL_SA <- readOGR('Data/Shapefiles/NL_RVsurveyAgg.shp')
 
 Survey.owin <- as.owin(NL_SA) #Need to change class of survey polygon & pts to use spatstat functions
 Survey.pts <- ppp(coordinates(Nflddata)[,1], coordinates(Nflddata)[,2], window = Survey.owin)
-intensity(Survey.pts) # ~1 pts per 167 sq. km
+intensity(Survey.pts) # ~1 pts per 115 sq. km
 NearNeigh <- nndist(Survey.pts, k = 1)
 stats::quantile(NearNeigh, probs = c(0.1,0.25,0.5,0.75,0.8,0.90,0.95, na.rm =TRUE)) 
-#95% of surveys with NN within 13 km, median of 5.6 km
-mean(NearNeigh) # ~6.1 km on average to nearest neighbour
+#95% of surveys with NN within 11 km, median of 4.5 km
+mean(NearNeigh) # ~4.9 km on average to nearest neighbour
 #standard tow is 0.8 nautical miles (1.48 km)
-#Grid size should be no smaller than 2 X 2 km and no larger than 13 X 13 km
+#Grid size should be no smaller than 2 X 2 km and no larger than 11 X 11 km
 
 #join wide format survey dataframe with grid
 load("Data/NLGridsWholeCell.RData")
@@ -157,7 +150,7 @@ points(Nflddata@coords[is.na(GridID),1],Nflddata@coords[is.na(GridID),2],col="bl
 populated<-(unique(joinedgrid$GridID))[complete.cases(unique(joinedgrid$GridID))] #get list of populated grid cells
 
 NLGrid@data$id <- 1:nrow(NLGrid@data)
-length(NLGrid) #35390 grid cells initiallly 
+length(NLGrid) #40298 grid cells initiallly 
 subgrid<-NLGrid[populated,] #select only those grid cells that our data populates
 
 #View it and see it makes sense
@@ -165,13 +158,13 @@ plot(NL_SA,axes=T)
 plot(subgrid,add=T)
 points(Nflddata@coords[!is.na(GridID),1],Nflddata@coords[!is.na(GridID),2],col="red",cex=0.1)
 points(Nflddata@coords[is.na(GridID),1],Nflddata@coords[is.na(GridID),2],col="black",pch = 16,cex=0.5)
-length(populated) #   3135 grid cells are populated by all benthic megainverts + fish species (~ 9% of cells in regional grid)
+length(populated) #   4910 grid cells are populated by all benthic megainverts + fish species (~ 12% of cells in regional grid)
 
 #Write this shapefile for later use
 #writeOGR(subgrid, dsn = "Data/NfldGrids", layer = "NL_4km_Grid", driver = 'ESRI Shapefile')
 
 goodco <- joinedgrid[!is.na(joinedgrid$GridID),] #select records that were in a grid cell 
-nrow(goodco) # 3390 sets were in the Nfld Study Area
+nrow(goodco) # 5621 sets were in the Nfld Study Area
 
 #write.csv(goodco, "Data/NfldGriddedData.csv")
 
@@ -190,10 +183,10 @@ hist(NumGrid$Frequency, main = 'Allocation of sets among grid cells', xlab = 'Se
 abline(v = mean(NumGrid$Frequency), col = 'red', lwd = 2)
 abline(v = median(NumGrid$Frequency), col = 'blue', lwd = 2, lty = 2)
 
-mean(NumGrid$Frequency) # 1.08
+mean(NumGrid$Frequency) # 1.14
 median(NumGrid$Frequency) # 1
-max(NumGrid$Frequency) # 4
-sd(NumGrid$Frequency) # 0.29
+max(NumGrid$Frequency) # 8
+sd(NumGrid$Frequency) # 0.46
 
 #fortify for ggplot mapping
 FortData <- fortify(subgrid, region = "id")
@@ -219,7 +212,7 @@ library("spdep", lib.loc="~/R/win-library/3.5")
 nb.NLGrid <- knn2nb(knearneigh(coordinates(NLGrid), k = 8,RANN = FALSE))
 nb.NLGrid.wts <- nb2listw(nb.NLGrid, style = "B")
 moran(NLGrid$freq, nb.NLGrid.wts, n = length(nb.NLGrid.wts$neighbours), S0 = Szero(nb.NLGrid.wts))
-moran.mc(NLGrid$freq, nb.NLGrid.wts, nsim = 99)
+moran.mc(NLGrid$freq, nb.NLGrid.wts, nsim = 99) # p = 0.01, I = 0.0816
 
 #############################################
 # 3. melt and cast to get site x species matrix -- We saved time and did this up front. The joined data
@@ -239,8 +232,8 @@ SpeciesSiteSummary <- SiteSummary[,Species]
 SpeciesSiteSummary[SpeciesSiteSummary>0]=1
 unique(unlist(SpeciesSiteSummary)) ## just 0 and 1 so we can now add across rows to figure which Grids are barren (1 or 0 species)
 speccount <- rowSums(SpeciesSiteSummary)
-range(speccount) ## 2 - 39
-table(speccount) ## 0 barren sites
+range(speccount) ## 1 - 39
+table(speccount) ## 2 barren sites
 
 BarrenSites <- Indval[speccount<2]
 IncludedSites <- setdiff(Indval,BarrenSites)
@@ -258,9 +251,9 @@ print(paste("Dropthreshold is",dropThreshold,"out of",nrow(SpeciesSiteSummary),"
 SpeciesCountSummary <- colSums(SpeciesSiteSummary)
 
 removedSpecies <- names(SpeciesCountSummary)[which(SpeciesCountSummary<dropThreshold)]
-removedSpecies #Is is weird that pollock and witch flounder among these>
+removedSpecies #Is is weird that pollock and witch flounder among these?
 IncludedSpecies <- setdiff(Species,removedSpecies)
-length(IncludedSpecies) #69 unique species
+length(IncludedSpecies) #71 unique species
 
 ### Trim the data ----------
 
