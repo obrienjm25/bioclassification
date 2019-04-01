@@ -43,15 +43,15 @@ benthtree4km.gow <- hclust(grid.pa.gow, method = 'average')
 #Calculate cophenetic correlation value for this tree
 #strongest correlation using simpson coefficient. Use simpson.
 copCor.simp<-cophenetic(benthtree4km.simp)
-cor(grid.pa.simp,copCor.simp) #0.606
+cor(grid.pa.simp,copCor.simp) #0.585
 
 copCor.soer <- cophenetic(benthtree4km.soer)
-cor(grid.pa.soer, copCor.soer) #0.349
+cor(grid.pa.soer, copCor.soer) #0.335
 
 copCor.jac <- cophenetic(benthtree4km.jac)
-cor(grid.pa.jac, copCor.jac) #0.333
+cor(grid.pa.jac, copCor.jac) #0.316
 
-copCor.gow <-cophenetic(benthtree4km.gow) #0.549
+copCor.gow <-cophenetic(benthtree4km.gow) #0.554
 cor(grid.pa.gow, copCor.gow)
 
 #compare fit of multiple cluster algorithms
@@ -75,8 +75,8 @@ saveRDS(benthtree4km.simp, file="Data/benthtree4km.rds")
 #
 benthtree <- readRDS('Data/benthtree4km.rds')
 plot(benthtree, hang=-1) #dendrogram
-rect.hclust(benthtree, h=0.585, border="red") #Cutoff as calculated by me
-seth<-0.585 #use my choice - more informative biologically
+rect.hclust(benthtree, h=0.587, border="red") #Cutoff as calculated by me
+seth<-0.587 #use my choice - more informative biologically
 cl<-dendroextras::slice(benthtree, h=seth) #Cut tree
 
 ###
@@ -200,12 +200,12 @@ addscalebar(pos = 'bottomright', htin =0.1,widthhint=0.3)
 legend(x = -61.8, y = 42.6, legend = legendmap$cl_name,
        fill = as.character(legendmap$assigned),  bty = "n", cex = 0.85)
 
-#write csv file for SiteXSpecies matriz with cluster and color assignments
+#write csv file for SiteXSpecies matrix with cluster and color assignments
 SiteXSpecies2 <- SiteXSpecies
 SiteXSpecies2$id<-rownames(SiteXSpecies2)
 SiteXSpecies_ClustAssigned<-merge(SiteXSpecies2, colorGridData, by="id")		
 head(SiteXSpecies_ClustAssigned)		
-write.csv(SiteXSpecies_ClustAssigned[,c(-117,-118)], "Data/Coloredgrid4km_cluster_assignment_Maritimes.csv")
+write.csv(SiteXSpecies_ClustAssigned[,c(-116,-117,-118)], "Data/Coloredgrid4km_cluster_assignment_Maritimes.csv")
 
 
 ###Move  on to indicator species analysis
