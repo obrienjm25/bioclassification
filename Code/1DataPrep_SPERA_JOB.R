@@ -256,7 +256,7 @@ length(IncludedSpecies) #114 unique species
 Output <- SiteSummary[SiteSummary$GridID%in%IncludedSites,IncludedSpecies]
 rownames(Output) <- SiteSummary[SiteSummary$GridID%in%IncludedSites,"GridID"] 
 Output[Output>0] <- 1 # convert finally to precence (1) and absence (0)
-
+Output <- dplyr::select(Output, -Clupea.harengus) #113 unique species
 ##Save the data
 #write.csv(Output, "Data/ClusterData4km.csv", row.names=T)
 
