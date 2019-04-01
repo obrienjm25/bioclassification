@@ -43,15 +43,15 @@ benthtree4km.gow <- hclust(grid.pa.gow, method = 'average')
 #Calculate cophenetic correlation value for this tree
 #strongest correlation using simpson coefficient. Use simpson.
 copCor.simp<-cophenetic(benthtree4km.simp)
-cor(grid.pa.simp,copCor.simp) #0.762
+cor(grid.pa.simp,copCor.simp) #0.716
 
 copCor.soer <- cophenetic(benthtree4km.soer)
-cor(grid.pa.soer, copCor.soer) #0.339
+cor(grid.pa.soer, copCor.soer) #0.308
 
 copCor.jac <- cophenetic(benthtree4km.jac)
-cor(grid.pa.jac, copCor.jac) #0.319
+cor(grid.pa.jac, copCor.jac) #0.284
 
-copCor.gow <-cophenetic(benthtree4km.gow) #0.434
+copCor.gow <-cophenetic(benthtree4km.gow) #0.461
 cor(grid.pa.gow, copCor.gow)
 
 #compare fit of multiple cluster algorithms
@@ -75,8 +75,8 @@ saveRDS(benthtree4km.simp, file="Data/benthtree4km_Nfld.rds")
 #
 benthtree <- readRDS('Data/benthtree4km.rds')
 plot(benthtree, hang=-1) #dendrogram
-rect.hclust(benthtree, h=0.484, border="red") #Cutoff as calculated by me
-seth<-0.484 #use my choice - more informative biologically
+rect.hclust(benthtree, h=0.494, border="red") #Cutoff as calculated by me
+seth<-0.494 #use my choice - more informative biologically
 cl<-dendroextras::slice(benthtree, h=seth) #Cut tree
 
 ###
@@ -117,7 +117,7 @@ colorcount2<-colorcount2[order(-colorcount2$Freq),] #order by frequency
 colorcount2$Freq<-as.character(colorcount2$Freq) 
 new<-c("others", paste("<", setfreq), "#e0e0e0") #add a column for the other clusters (less than top 5 - color them grey)
 legendcluster<-rbind(colorcount2, new)
-legendcluster$cl_name <- c("Outer Shelf","Inner Shelf","Grand Banks","Slope","Grand Banks: SW Margin","Other") 
+legendcluster$cl_name <- c("Inner Shelf","Outer Shelf","Grand Banks","Slope", "Laurentian Channel/Shelf Break","Other") 
 legendcluster #legend
 
 #Print dendrogram
@@ -160,7 +160,6 @@ Land <- readOGR('Data/Shapefiles/NL_landborders.shp')
 legendmap<-legendcluster
 
 #Plot map in projected coordinate system
-library(prettymapr)
 tiff("Output/ColourGrid_Nfld4km.tiff", res=300, height=3000, width=2400)
 par(mar = c(5,2,8,1), usr = c(67854.73,1500000,4700000,6800000), xpd = NA)
 plot(NL_SA)
@@ -179,7 +178,7 @@ SiteXSpecies2 <- SiteXSpecies
 SiteXSpecies2$id<-rownames(SiteXSpecies2)
 SiteXSpecies_ClustAssigned<-merge(SiteXSpecies2, colorGridData, by="id")		
 head(SiteXSpecies_ClustAssigned)		
-write.csv(SiteXSpecies_ClustAssigned[,c(-72,-73)], "Data/Coloredgrid4km_cluster_assignment_Nfld.csv")
+write.csv(SiteXSpecies_ClustAssigned[,c(-74,-75)], "Data/Coloredgrid4km_cluster_assignment_Nfld.csv")
 
 
 ###Move  on to indicator species analysis
