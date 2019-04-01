@@ -130,25 +130,22 @@ close(rmlist)
 
 #import predictor variables retained for modelling
 
-raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Mar', full.names = T) #get list of raster files
-env_pred <- stack(raster.list) #stack rasters in list
-names(env_pred) <- gsub('Mar_','',names(env_pred)) #remove 'Mar_' from layer names
 retained_vars <- readLines(file('Output/Mar_retain_list.txt'))#list of retained variables
-env_pred <- env_pred[[retained_vars]] #subset raster stack to include only retained variables
-RV_strata <- readOGR('Data/Shapefiles/MaritimesRegionStrataBoundaries.shp') # RV strata polygons
-RV_strata <- spTransform(RV_strata, CRS('+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0'))
-RV_strata <- RV_strata[-which(RV_strata@data$OBJECTID_1 == 1:6),]#remove strata outside Maritimes Planning Area
-RV_strata <- aggregate(RV_strata) # aggregate strata to form 1 polygon
-#writeOGR(as(RV_strata, 'SpatialPolygonsDataFrame'), dsn = 'Data/Shapefiles', layer =  'MaritimesRegionStrataAgg', driver = 'ESRI Shapefile')
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Mar', full.names = T) #get list of raster files
+RV_strata <- readOGR('Data/Shapefiles/MaritimesRegionStrataAgg.shp')
 LandBuffer <- readOGR('Data/Shapefiles/Maritimes_LandBuffer_5km.shp') # 5km buffer around land points
-env_pred <- mask(env_pred, RV_strata) #mask raster cells of predictors outside RV survey boundaries
-env_pred <- mask(env_pred, LandBuffer, inverse = T) #also mask cells overlapped by 5km land buffer
+
+env_pred <- stack(raster.list) %>%  #stack rasters in list
+  `names<-`(.,gsub('Mar_','',names(.))) %>% #remove 'Mar_' from layer names
+   .[[retained_vars]] %>%  #subset raster stack to include only retained variables
+  mask(., RV_strata) %>%  #mask raster cells of predictors outside RV survey boundaries
+  mask(., LandBuffer, inverse = T) #also mask cells overlapped by 5km land buffer
 
 #import spatial polygons dataframe of populated 4km grid cells with cluster assignment as 
 #attribute variable
 
 MarGrid_populated <- readOGR('Data/Shapefiles/GridClusterAssignment4km_Maritimes.shp')
-minor_cl <- factor(c('5','6','7','8','9','10','11','14','15')) #minor clusters
+minor_cl <- factor(which(summary(MarGrid_populated$cl) < 20)) #minor clusters
 #exclude minor clusters
 MarGrid_populated <- MarGrid_populated[-which(MarGrid_populated@data$cl %in% minor_cl),] 
 
@@ -157,18 +154,18 @@ p.data <- raster::extract(env_pred,MarGrid_populated, factors = T, nl = nlayers(
 RF.data <- data.frame(coordinates(MarGrid_populated), MarGrid_populated@data, p.data[,-1]) #join environmental data with grid df
 RF.data <- RF.data %>% rename(., x = X1, y = X2)
 missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
-table(missing.data$cl) #cluster 13 mostly effected by incomplete cases (26) because location in inner BoF
+table(missing.data$cl) #cluster 8 mostly effected by incomplete cases (23) because location in inner BoF
 RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
 RF.data <- droplevels(RF.data) #drop unused factor levels from dataframe & recode retained factors
-RF.data$cl <- recode_factor(RF.data$cl, `1` = '1', `2` = '2', `3` = '3', `4` = '4', `12` = '5', `13` = '6')
+RF.data$cl <- recode_factor(RF.data$cl, `1` = '1', `5` = '2', `4` = '3', `2` = '4', `9` = '5', `8` = '6') #Slope, LC,ESS, ESS:Banks, WSS/Inner BoF, WSS:Banks/Inner BoF
 
 #build model
 
 # specify model formula
 formula <-  as.formula(paste('cl','~',paste(retained_vars, collapse = '+'))) 
-#fit model, 18.77% OOB error rate
+#fit model, 20.02% OOB error rate (higher for ESS 30.94%)
 RF.mod1 <- randomForest(formula, data = RF.data, ntree = 10000, importance = T) 
-RF.output <- saveRDS(RF.mod1, 'Output/Maritimes_RF_model.rds')
+saveRDS(RF.mod1, 'Output/Maritimes_RF_model.rds')
 
 ####Evaluate model accuracy w/ 10-fold cross-validation####
 
@@ -179,18 +176,18 @@ CalVal.list <- 1:nfold %>% map(~ list(cal = which(groups != .), val = which(grou
 
 cv10 <- CalVal.list %>% 
   map(~ list(model = randomForest(formula, data = RF.data[.$cal,], ntree = 10000), val = RF.data[.$val,])) %>% 
-  map(~ list(obs = as.numeric(.$val$cl), predictions = as.numeric(predict(.$model, newdata = .$val)))) %>% 
+  map(~ list(obs = as.numeric(.$val$cl), predictions = predict(.$model, newdata = .$val, type = 'prob'))) %>%  
   map(~ multiclass.roc(.$obs, .$predictions)$auc) #compute multi-class AUC using each calibration/validation pair 
 AUC <- mean(unlist(cv10)) #average AUC for each 90:10 split of data
-#High AUC 0.933 suggests high predictive power of model
+#High AUC 0.962 suggests high predictive power of model
 
 ####Predict classification for grids without biological data and plot####
 predict.map <- raster::predict(env_pred, RF.mod1) # predict cluster membership over raster surfaces
 my.colors = c('#e6ab02','#6a3d9a','#33a02c','#ff7f00', '#a6cee3','#1f78b4') # color scheme for rasters
 plot(predict.map, col = my.colors)
 writeRaster(predict.map, filename = 'Output/Maritimes_PredClust_map.tif', overwrite = T) #write prediction to file
-raster_boundary <- aggregate(rasterToPolygons(predict.map))
-writeOGR(as(raster_boundary, 'SpatialPolygonsDataFrame'), dsn = 'Data/Shapefiles', layer = 'MaritimesRasterBoundary', driver = 'ESRI Shapefile')
+# raster_boundary <- aggregate(rasterToPolygons(predict.map))
+# writeOGR(as(raster_boundary, 'SpatialPolygonsDataFrame'), dsn = 'Data/Shapefiles', layer = 'MaritimesRasterBoundary', driver = 'ESRI Shapefile')
 
 ####Variable importance plots####
 
@@ -201,8 +198,8 @@ varImp$predictor <- c('Aspect','Avg max PP (spring/summer)','Depth','DO','BPI (0
 varImp <- varImp[order(-varImp$MeanDecreaseAccuracy),]
 varImp$predictor <- factor(varImp$predictor, 
                            levels = varImp$predictor[order(varImp$MeanDecreaseAccuracy)])
-colnames(varImp)[1:7] <- c('Slope','Laurentian Channel/\nShelf Break', 'ESS', 
-                            'ESS: Banks','WSS/Outer BoF', 'WSS: Banks/\nInner BoF','Whole Model')
+colnames(varImp)[1:7] <- c('Slope','Laurentian Channel/\nShelf Break', 'ESS',
+                           'ESS: Banks','WSS/Outer BoF', 'WSS: Banks/\nInner BoF','Whole Model')
 varImp <- gather(varImp, 'class', 'MeanDecreaseAccuracy', 1:7)
 varImp$class <- factor(varImp$class, levels = c('Whole Model','Slope','Laurentian Channel/\nShelf Break', 'ESS',
                                                 'ESS: Banks','WSS/Outer BoF', 'WSS: Banks/\nInner BoF'))
@@ -220,7 +217,7 @@ dev.off()
 
 ####Highlighting areas of lower model certainty####
 
-#extract environemtnal raster cell values into dataframe
+#extract environmental raster cell values into dataframe
 env_pred_df <- data.frame(getValues(env_pred)) 
 #get RF predictions for environmental layers cell values as probability
 RF.predictions <- predict(object = RF.mod1, newdata = env_pred_df, type = 'prob')
@@ -231,9 +228,8 @@ RF.predictions <- predict(object = RF.mod1, newdata = env_pred_df, type = 'prob'
 VoteCounts <- data.frame(RF.predictions) %>%
   rowwise() %>%
   mutate(maxVC = max(c(X1,X2,X3,X4,X5,X6))) %>% 
-  select(maxVC) %>%
+  dplyr::select(maxVC) %>%
   data.frame()
-  
 
 # create raster layer with max proportion of vote counts
 VoteCountsRaster <- raster(env_pred[[1]]) 
@@ -242,8 +238,31 @@ VoteCountsRaster <- setValues(VoteCountsRaster, as.vector(VoteCounts$maxVC))
 VoteCountsShape0.5 <- rasterToPolygons(VoteCountsRaster, fun = function(x){x<0.5}, na.rm = T)
 VoteCountsShape0.7 <- rasterToPolygons(VoteCountsRaster, fun = function(x){x<0.7}, na.rm = T)
 #write SPDFs to new shapefiles
-writeOGR(VoteCountsShape0.5, dsn = 'Output', layer = 'Maritimes_RF_uncertainty_0.5', driver = 'ESRI Shapefile') 
-writeOGR(VoteCountsShape0.7, dsn = 'Output', layer = 'Maritimes_RF_uncertainty_0.7', driver = 'ESRI Shapefile') 
+writeOGR(VoteCountsShape0.5, dsn = 'Output', layer = 'Maritimes_RF_uncertainty_0.5', driver = 'ESRI Shapefile', overwrite_layer = T) 
+writeOGR(VoteCountsShape0.7, dsn = 'Output', layer = 'Maritimes_RF_uncertainty_0.7', driver = 'ESRI Shapefile', overwrite_layer = T) 
+
+####Evaluate uncertainty threshold  by examining relationship between assignment probability and success of prediction####
+
+uncertainty <- data.frame(RF.mod1$votes) %>% 
+  rowwise() %>% 
+  mutate(maxVC = max(c(X1,X2,X3,X4,X5,X6))) %>% 
+  dplyr::select(maxVC) %>%
+  data.frame(., predicted = RF.mod1$predicted, actual = RF.mod1$y) %>% 
+  mutate(correct = as.integer(predicted == actual)) %>% 
+  arrange(., predicted)
+
+roc(uncertainty$correct,uncertainty$maxVC, plot = T) #examine ROC. Threshold should favour highlighting potential
+                                                     #false positives at the expense ofthe true positive rate
+
+#examine the true negative/false positive rates at the 0.5 & 0.7 thresholds proposed above
+
+uncertainty %>%#
+  split(.$correct) %>% #split data by whether classification was correct
+  map(~ stats::quantile(.$maxVC, probs = seq(0.1,0.8,0.05))) #calculate range of percentiles
+#Thresholds of 0.5 & 0.7, result in true negative rate of ~25% and ~70% respectively (i.e. FPR = 75% & 30%)
+uncertainty %>% filter(maxVC < 0.7) %>% count(.,correct) #False negative rate of ~30%
+
+plot(uncertainty$correct ~ uncertainty$maxVC) #examine relationship between assignment probability & assignment success
 
 ####Distribution of important variables across cluster####
 
@@ -257,7 +276,7 @@ box_depth <- ggplot(RF.data, aes(x = cl,y = bathy, fill = cl)) +
   labs(x = NULL, y = 'Depth (m)') +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
   theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12), 
-        axis.title.y = element_text(margin = margin(0,12,0,0,'pt')),
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_depth
 
 #boxplot for min ann bottom temp  
@@ -268,7 +287,7 @@ box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
   labs(x = NULL, y = expression(paste('   Average min\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
   theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12), 
-        axis.title.y = element_text(margin = margin(0,12,0,0,'pt')),
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_minT
 
 #boxplot for max ann bottom temp
@@ -280,7 +299,7 @@ box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
   labs(x = NULL, y = expression(paste('   Average max\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
   theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
-        axis.title.y = element_text(margin = margin(0,12,0,0,'pt'), hjust = 0.5),
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_maxT
 
 #boxplot for max ann bottom salinity
@@ -291,7 +310,7 @@ box_maxSal <- ggplot(RF.data, aes(x = cl,y = max_ann_BSal, fill = cl)) +
   labs(x = NULL, y = expression(paste('Average max salinity (\u2030)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
   theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
-        axis.title.y = element_text(margin = margin(0,12,0,0,'pt')),
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_maxSal
 
 #coerce ggplot objects to graphical objects
@@ -309,3 +328,61 @@ tiff('Output/Maritimes_EnvVariation.tiff', width = 8, height = 8, units = 'in', 
 plot(g)
 dev.off()
 
+####Build Model without depth####
+
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Mar', full.names = T) #get list of raster files
+env_pred <- stack(raster.list) #stack rasters in list
+names(env_pred) <- gsub('Mar_','',names(env_pred)) #remove 'Mar_' from layer names
+retained_vars <- readLines(file('Output/Mar_retain_list.txt'))#list of retained variables
+retained_vars <- retained_vars[-3] #remove depth from predictors
+env_pred <- env_pred[[retained_vars]] #subset raster stack to include only retained variables
+RV_strata <- readOGR('Data/Shapefiles/MaritimesRegionStrataAgg.shp')
+LandBuffer <- readOGR('Data/Shapefiles/Maritimes_LandBuffer_5km.shp') # 5km buffer around land points
+env_pred <- mask(env_pred, RV_strata) #mask raster cells of predictors outside RV survey boundaries
+env_pred <- mask(env_pred, LandBuffer, inverse = T) #also mask cells overlapped by 5km land buffer
+
+#import spatial polygons dataframe of populated 4km grid cells with cluster assignment as 
+#attribute variable
+
+MarGrid_populated <- readOGR('Data/Shapefiles/GridClusterAssignment4km_Maritimes.shp')
+minor_cl <- factor(names(table(MarGrid_populated$cl))[which(table(MarGrid_populated$cl) < 20)]) #minor clusters
+#exclude minor clusters
+MarGrid_populated <- MarGrid_populated[-which(MarGrid_populated@data$cl %in% minor_cl),] 
+
+#Extract raster values at each populated grid cell
+p.data <- raster::extract(env_pred,MarGrid_populated, factors = T, nl = nlayers(env_pred), df = T) #extract values into df
+RF.data <- data.frame(coordinates(MarGrid_populated), MarGrid_populated@data, p.data[,-1]) #join environmental data with grid df
+RF.data <- RF.data %>% rename(., x = X1, y = X2)
+missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
+table(missing.data$cl) #cluster 8 mostly effected by incomplete cases (23) because location in inner BoF
+RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
+RF.data <- droplevels(RF.data) #drop unused factor levels from dataframe & recode retained factors
+RF.data$cl <- recode_factor(RF.data$cl, `1` = '1', `5` = '2', `4` = '3', `2` = '4', `9` = '5', `8` = '6') #Slope, LC,ESS, ESS:Banks, WSS/Inner BoF, WSS:Banks/Inner BoF
+
+#build model
+
+# specify model formula
+formula <-  as.formula(paste('cl','~',paste(retained_vars, collapse = '+'))) 
+#fit model, 22.75% OOB error rate (higher for ESS 44.84%)
+RF.mod1 <- randomForest(formula, data = RF.data, ntree = 10000, importance = T) 
+saveRDS(RF.mod1, 'Output/Maritimes_RF_model_NoDepth.rds')
+
+#Evaluate model accuracy w/ 10-fold cross-validation
+
+nfold <-  10 #number of splits of the data
+n <- nrow(RF.data) #number of observations in data
+groups <- sample(rep(1:nfold, length = n), n) #assign observation to 1 of 10 splits of the data (groups)
+CalVal.list <- 1:nfold %>% map(~ list(cal = which(groups != .), val = which(groups == .))) #indices for 10 calibration and validation datasets
+
+cv10 <- CalVal.list %>% 
+  map(~ list(model = randomForest(formula, data = RF.data[.$cal,], ntree = 10000), val = RF.data[.$val,])) %>% 
+  map(~ list(obs = as.numeric(.$val$cl), predictions = as.numeric(predict(.$model, newdata = .$val)))) %>% 
+  map(~ multiclass.roc(.$obs, .$predictions)$auc) #compute multi-class AUC using each calibration/validation pair 
+AUC <- mean(unlist(cv10)) #average AUC for each 90:10 split of data
+#High AUC 0.902 suggests high predictive power of model
+
+#Predict classification for grids without biological data and plot#
+predict.map <- raster::predict(env_pred, RF.mod1) # predict cluster membership over raster surfaces
+my.colors = c('#e6ab02','#6a3d9a','#33a02c','#ff7f00', '#a6cee3','#1f78b4') # color scheme for rasters
+plot(predict.map, col = my.colors)
+writeRaster(predict.map, 'Output/Maritimes_PredClust_map_NoDepth.tif', overwrite = T) #save raster
