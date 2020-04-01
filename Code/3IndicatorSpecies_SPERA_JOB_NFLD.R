@@ -25,19 +25,19 @@ colorGridData<-colorGridData[,-1] #remove superfluous index variable
 top5 <- names(sort(table(colorGridData$cl), decreasing = T))[1:5] #list of top 5 clusters
 
 colorGridData_top5<-colorGridData[colorGridData$cl %in% top5,] #create subset df of top 5 clusters
-PA_data<-colorGridData_top5[,c(-1,-73,-74)] #remove columns to create strictly sitexspecies PA matrix
+PA_data<-colorGridData_top5[,c(-1,-73,-74,-75)] #remove columns to create strictly sitexspecies PA matrix
 
-colorGridData_top5$cl2[colorGridData_top5$cl==9]<-1 #assign top 5 clusters new numeric cluster membership
-colorGridData_top5$cl2[colorGridData_top5$cl==11]<-2 #between 1 and 5 in order of largest to smallest
-colorGridData_top5$cl2[colorGridData_top5$cl==8]<-3
+colorGridData_top5$cl2[colorGridData_top5$cl==7]<-1 #assign top 5 clusters new numeric cluster membership
+colorGridData_top5$cl2[colorGridData_top5$cl==8]<-2 #between 1 and 5 in order of largest to smallest
+colorGridData_top5$cl2[colorGridData_top5$cl==6]<-3
 colorGridData_top5$cl2[colorGridData_top5$cl==1]<-4
 colorGridData_top5$cl2[colorGridData_top5$cl==4]<-5
 
 
 #Provide a name to each cluster associated with broad geomorphic features
-colorGridData_top5$ecoregion[colorGridData_top5$cl==9]<- "Inner Shelf" 
-colorGridData_top5$ecoregion[colorGridData_top5$cl==11]<- "Outer Shelf"
-colorGridData_top5$ecoregion[colorGridData_top5$cl==8]<- "Grand Banks"
+colorGridData_top5$ecoregion[colorGridData_top5$cl==7]<- "Inner Shelf" 
+colorGridData_top5$ecoregion[colorGridData_top5$cl==8]<- "Outer Shelf"
+colorGridData_top5$ecoregion[colorGridData_top5$cl==6]<- "Grand Banks"
 colorGridData_top5$ecoregion[colorGridData_top5$cl==1]<- "Slope"
 colorGridData_top5$ecoregion[colorGridData_top5$cl==4]<- "Laurentian Channel/Shelf Break"
 
@@ -50,8 +50,8 @@ dim(PA_data)
 
 indicators2<-indval(PA_data, as.numeric(colorGridData_top5$cl2)) #indicator analysis as proposed by Dufrene & Legendre 1997
 
-summary.indval(indicators2, type="long") #species x cluster table with indicator values
-summary.indval(indicators2) #indicator value and probability for significant indicator species grouped by cluster
+summary(indicators2, type="long") #species x cluster table with indicator values
+summary(indicators2) #indicator value and probability for significant indicator species grouped by cluster
 
 relfreq<-indicators2$relfrq #get relative frequency for that species in that cluster
 relabund<-indicators2$relabu #get relative abundace for that species in that cluster
