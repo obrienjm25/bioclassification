@@ -46,7 +46,7 @@ load("Data/MaritimesData.RData")
 #length(unique(Maritimes$common_name)) # 171 ## equal to number of unique species
 #length(unique(Maritimes$spec_code)) #167
 #length(unique(Maritimes$spec)) #196
-#Fewer common_names/species than original species code. Perhaps some duplicates exist because unique taxa were 
+#Fewer common_names/species than original species code. Perhaps some duplicates exist because unique taxa were
 #incorrectly reclassified
 
 #Examine which unique ID's are duplicated
@@ -123,6 +123,7 @@ MaritimeProj <- spTransform(MaritimeRegion,CRS("+proj=utm +zone=20 +datum=NAD83 
 RVsurvey <- readOGR("Data/MaritimesPlanningRegion/MaritimesRegionStrataBoundaries.shp")
 RVsurvey <- spTransform(RVsurvey, CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
 SurveyBoundary <- aggregate(intersect(MaritimeProj, RVsurvey))
+#3025 sets lie within the study area bounderies (858 spring, 2167 summer)
 Survey.owin <- as.owin(SurveyBoundary) #Need to change class of survey polygon & pts to use spatstat functions
 Survey.pts <- ppp(coordinates(Mardata)[,1], coordinates(Mardata)[,2], window = Survey.owin)
 intensity(Survey.pts) # ~1.4 pts per 100 sq. km
@@ -162,9 +163,9 @@ length(populated) #   2529 grid cells are populated by all benthic megainverts +
 goodco <- joinedgrid[!is.na(joinedgrid$GridID),] #select records that were in a grid cell 
 nrow(goodco) # 3018 sets were in the Maritime Study Area
 
-#write.csv(goodco, "Data/MaritimesGriddedData.csv")
+# write.csv(goodco, "Data/MaritimesGriddedData.csv")
 
-## set up data to view how many observations are in each grid cell
+# set up data to view how many observations are in each grid cell
 NumGrid <- data.frame(table(goodco$GridID))
 colnames(NumGrid) <- c("Grid","Frequency")
 NumGrid$Grid <- as.numeric(as.character(NumGrid$Grid))
@@ -258,6 +259,6 @@ rownames(Output) <- SiteSummary[SiteSummary$GridID%in%IncludedSites,"GridID"]
 Output[Output>0] <- 1 # convert finally to precence (1) and absence (0)
 Output <- dplyr::select(Output, -Clupea.harengus) #113 unique species
 ##Save the data
-#write.csv(Output, "Data/ClusterData4km.csv", row.names=T)
+# write.csv(Output, "Data/ClusterData4km.csv", row.names=T)
 
 #Move onto cluster analysis
