@@ -131,7 +131,7 @@ close(rmlist)
 #import predictor variables retained for modelling
 
 retained_vars <- readLines(file('Output/Mar_retain_list.txt'))#list of retained variables
-raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Mar', full.names = T) #get list of raster files
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Mar.+\\.tif$', full.names = T) #get list of raster files
 RV_strata <- readOGR('Data/Shapefiles/MaritimesRegionStrataAgg.shp')
 LandBuffer <- readOGR('Data/Shapefiles/Maritimes_LandBuffer_5km.shp') # 5km buffer around land points
 
@@ -152,7 +152,7 @@ MarGrid_populated <- MarGrid_populated[-which(MarGrid_populated@data$cl %in% min
 #Extract raster values at each populated grid cell
 p.data <- raster::extract(env_pred,MarGrid_populated, factors = T, nl = nlayers(env_pred), df = T) #extract values into df
 RF.data <- data.frame(coordinates(MarGrid_populated), MarGrid_populated@data, p.data[,-1]) #join environmental data with grid df
-RF.data <- RF.data %>% rename(., x = X1, y = X2)
+RF.data <- RF.data %>% dplyr::rename(., x = X1, y = X2)
 missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
 table(missing.data$cl) #cluster 8 mostly effected by incomplete cases (23) because location in inner BoF
 RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
@@ -204,7 +204,9 @@ varImp <- gather(varImp, 'class', 'MeanDecreaseAccuracy', 1:7)
 varImp$class <- factor(varImp$class, levels = c('Whole Model','Slope','Laurentian Channel/\nShelf Break', 'ESS',
                                                 'ESS: Banks','WSS/Outer BoF', 'WSS: Banks/\nInner BoF'))
 
-tiff('Output/Maritimes_VarImpPlot.tiff', width = 9, height = 2.5, units = 'in', res = 300)                                                                                                
+# faceted by cluster
+
+tiff('Output/Maritimes_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300, compression = 'lzw')                                                                                                
 p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   geom_point(stat = 'identity') +
   facet_grid(~class) +
@@ -214,6 +216,21 @@ p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   theme(axis.text.x = element_text(angle = 90), 
         text = element_text(size = 10)); p1
 dev.off()
+
+saveRDS(p1, 'Output/Maritimes_VarImpPlot.rds')
+
+# Whole model only
+varImp$class2 <- factor(varImp$class, labels = c('MAR',NA,NA,NA,NA,NA,NA))
+p2 <- ggplot(varImp[varImp$class == 'Whole Model',], aes(x = predictor, y = MeanDecreaseAccuracy)) +
+  geom_point(stat = 'identity') +
+  facet_grid(~class2) +
+  theme_bw() +
+  coord_flip() +
+  labs(x = NULL, y = 'Mean Decrease in Accuracy') + 
+  theme(axis.text.x = element_text(angle = 90), 
+        text = element_text(size = 10)); p2
+
+saveRDS(p2, 'Output/Maritimes_VarImpPlot_WM.rds')
 
 ####Highlighting areas of lower model certainty####
 
@@ -266,7 +283,8 @@ plot(uncertainty$correct ~ uncertainty$maxVC) #examine relationship between assi
 
 ####Distribution of important variables across cluster####
 
-my.colors = c('#e6ab02','#6a3d9a','#33a02c','#ff7f00', '#a6cee3','#1f78b4') # color scheme for clusters
+source('Code/SPERA_colour_palettes.R')
+my.colors <- MAR.palette$assigned[c(6,5,3,4,1,2)] # color scheme for clusters
 
 #boxplot for depth
 box_depth <- ggplot(RF.data, aes(x = cl,y = bathy, fill = cl)) +
@@ -275,7 +293,7 @@ box_depth <- ggplot(RF.data, aes(x = cl,y = bathy, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = 'Depth (m)') +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
-  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_depth
 
@@ -286,7 +304,7 @@ box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('   Average min\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
-  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_minT
 
@@ -298,7 +316,7 @@ box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
   scale_y_continuous(limits = c(0,16)) +
   labs(x = NULL, y = expression(paste('   Average max\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_maxT
 
@@ -309,7 +327,7 @@ box_maxSal <- ggplot(RF.data, aes(x = cl,y = max_ann_BSal, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Average max salinity (\u2030)'))) +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_maxSal
 
@@ -324,7 +342,7 @@ r1 <- cbind(g1, g3, size = 'first') #bind/align plot elements of row 1
 r2 <- cbind(g2, g4, size = 'first') #bind/align plot elements of row 2
 g <- rbind(r1, r2, size = 'first') #bind/align plot elements of both rows
 
-tiff('Output/Maritimes_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300)
+tiff('Output/Maritimes_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300, compression = 'lzw')
 plot(g)
 dev.off()
 
