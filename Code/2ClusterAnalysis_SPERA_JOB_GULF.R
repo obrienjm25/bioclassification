@@ -13,8 +13,26 @@
 ## Adapted code for Biological classification analysis - Eastern Canadian groundfish - Stanley, Heaslip, Jeffery, O'Brien
 #########################################
 
-pkgs <- list('vegan', 'simba', 'maptools', 'pvclust', 'dendroextras', 'dendextend', 'raster', 'reshape', 'reshape2', 'dplyr', 'tidyr', 'NbClust', 'rgdal','purrr')
-invisible(lapply(pkgs, library, character.only = T))
+library(vegan)
+library(simba)
+library(maptools)
+library(pvclust)
+library(dendroextras)
+library(dendextend)
+library(dendroextras)
+library(reshape)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(rgdal)
+library(NbClust)
+library(ggplot2)
+library(ggdendro)
+library(sf)
+library(tmap)
+library(raster)
+library(nngeo)
+library(purrr)
 
 ##############################
 # CLUSTER ANALYSIS STARTS
@@ -63,60 +81,63 @@ seth<-0.498 #use my choice - more informative biologically
 cl<-dendroextras::slice(benthtree, h=seth) #Cut tree
 
 ###
-colorcount<-as.data.frame(table(cl)) #get Table of cluster memberships
-colorcount #Number of sites in each cluster. 9 clusters with 0.498 cut-off
-colorcount <-colorcount[order(-colorcount$Freq),] #order by frequency
-colorcount
-setfreq<-min(colorcount$Freq[1:4], na.rm=T) #Select the top clusters to be color-coded
+colorcount<-as.data.frame(table(cl)) %>%  #get Table of cluster memberships
+  arrange(desc(Freq)) %>% #order by frequency
+  print() #Number of sites in each cluster # 9 clusters with 0.498 cut-off
+
+filter(colorcount, Freq >= 20) %>% nrow() # 4 major clusters (>= 20 sites)
 
 #Count the number of sites in the top clusters
-sum(colorcount$Freq[1:4]) # 1316 sites in top 4 clusters at 0.498 cut-off
 
-# #Set Colors for top 4 clusters (SubBiomes)
+sum(colorcount$Freq[colorcount$Freq>= 20]) # 1316 sites in top 4 clusters at 0.498 cut-off
 
-colorscheme<-c("#a6cee3", #lblue
-                "#ff7f00", #orange
-               "#6a3d9a", #purple
-               "#1f78b4") #dblue
+# Set Colors for top 4 clusters (SubBiomes)
 
-#a6cee3, lblue
-#1f78b4, dblue
-#e6ab02, yellow                
+source('Code/SPERA_colour_palettes.R')
 
 #Assign colours to clusters
 
-colorcount$assigned[colorcount$Freq<setfreq]<-"#e0e0e0" #set all clusters that occur at less than the assigned cut off (4 clusters) to grey
-colorcount$assigned[1:4] <- colorscheme
-colorcount <- colorcount[order(colorcount$cl),]
-
-colorcount #Each cluster is assigned a color
-table(colorcount$assigned)
+colorcount <- left_join(colorcount, GULF.palette) %>% 
+  replace_na(list(assigned = "#e0e0e0", name = "Unclassified")) %>% #set all clusters that occur < cut-off to grey
+  arrange(as.numeric(cl)) %>% #order by cluster ID
+  print() #Each cluster is assigned a color
 
 #Create color-coded dendrogram
+colortree<-colour_branches(benthtree, h=seth,col=colorcount$assigned) %>%   
+  as.ggdend() %>% 
+  segment() %>% 
+  replace_na(list(col = '#000000')) %>% 
+  left_join(., colorcount, by = c('col' = 'assigned')) %>% 
+  mutate(lwd = if_else(col == '#000000', 0.75, 0.5))
 
-colortree<-colour_branches(benthtree, h=seth,col=as.character(colorcount$assigned))
+gg.colortree <- ggplot(colortree) + 
+  theme_classic() +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend, colour = col, size = lwd), 
+               lineend = 'square',
+               linejoin = 'bevel') +
+  scale_size_identity() +
+  scale_color_identity('', 
+                       guide = 'legend', 
+                       breaks = GULF.palette$assigned, 
+                       labels = GULF.palette$name) +
+  guides(col = guide_legend(override.aes = list(size = 2))) +
+  scale_y_continuous(name = 'Simpson Distance', limits = c(0,1), expand = c(0,0)) +
+  labs(tag = 'SGSL') +
+  theme(legend.text = element_text(size = 12),
+        legend.position = 'bottom',
+        legend.justification = c(0,1),
+        legend.direction = 'vertical',
+        legend.key = element_rect(fill = 'white', colour = 'white'),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        axis.line.x = element_line(colour = 'white'),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.tag = element_text(face = 'bold', size = 16),
+        plot.tag.position = c(0.8,0.92)); gg.colortree
 
-#create legend
-colorcount2<-subset(colorcount, Freq>=setfreq) #Select top 4 clusters
-colorcount2$cl<-as.character(colorcount2$cl)
-colorcount2$Freq<-as.numeric(colorcount2$Freq)
-colorcount2<-colorcount2[order(-colorcount2$Freq),] #order by frequency
-colorcount2$Freq<-as.character(colorcount2$Freq) 
-new<-c("others", paste("<", setfreq), "#e0e0e0") #add a column for the other clusters (less than top 4 - color them grey)
-legendcluster<-rbind(colorcount2, new)
-legendcluster$cl_name <- c("Magdalen Shallows" ,"Inshore/Magdalen Is.","Laurentian Channel","Northumberland Strait/\nSt. George's Bay","Other") 
-legendcluster #legend
-
-#Print dendrogram
-# #small - pub 
-# tiff("Output/Dendrogram_Gulf4km_large.tiff", res=350, height=8, width=14, units="cm", pointsize=7)
-#large - csas
- tiff("Output/Dendrogram_Gulf4km_large.tiff", res=300, height=2000, width=3800)
-
-plot(colortree,xlab="", ylab="Simpson Distance", leaflab = "none")
-
- dev.off()
-
+saveRDS(gg.colortree, 'Output/ggDendrogram_Gulf.rds') 
 
 ###plot this cluster analysis on map
 #import the subsetted grid (grid cells for which we had data) that we wrote earlier
@@ -139,26 +160,158 @@ colorGridData<-colorsgrid@data
 #write shapefile with cluster and color assignment attributes for 4 km subgrid
 writeOGR(colorsgrid, dsn = 'Data/Shapefiles', layer = 'GridClusterAssignment4km_Gulf', driver = "ESRI Shapefile", overwrite_layer = T)
 
-#Mapping shapefiles
-Gulf_SA <- readOGR('Data/Shapefiles/Gulf_RVsurveyAgg.shp')
-Land <- readOGR('Data/Shapefiles/Gulf_landborders.shp')
+# Read in other mapping shapefiles
 
-#adjust legend for map
-legendmap<-legendcluster
+Land <- st_read('Data/Shapefiles/Gulf_landborders.shp')
+load("Data/GulfGridsWholeCell.RData") #load grid files
+grid.4km <- Griddata[[20]] %>% st_as_sf() %>% st_transform(., st_crs(Land)) # 4 km resolution 
 
-#Plot map in projected coordinate system
-tiff("Output/ColourGrid_Gulf4km.tiff", res=300, height=3000, width=2400)
-par(mar = c(5,5,8,1), usr = c(255798,746002.1,5033918,5472640), xpd = NA)
-plot(Gulf_SA)
-plot(colorsgrid, col = as.character(colorsgrid$assigned), border = NA,add=T)
-plot(Land, col = 'gray97', border = 'gray10', add = T)
-axis(1,at = c(300000,500000,700000), pos = 5033918, tick = T)
-axis(2,at = c(5100000,5250000,5400000), pos = 255798, tick = T)
-plot(extent(Land), add = T)
-legend(x = 590000, y = 5455000 , legend = legendmap$cl_name,
-       fill = as.character(legendmap$assigned),  bty = "n", cex = 0.85)
-dev.off()
+StudyArea <- grid.4km %>% st_union() %>% st_transform(crs = 26920)# aggregate grid cells
 
+#convert colorsgrid to simple features object
+colorsgrid.sf <- st_as_sf(colorsgrid) %>% # convert to sf
+  st_transform(., crs = 26920) # match crs with study area
+
+sel_cells_SA <- st_within(colorsgrid.sf, StudyArea, sparse = F)[,1] # identify grid cells within study area
+
+colorsgrid.sf2 <- filter(colorsgrid.sf, sel_cells_SA == T)  
+
+# Plot map of coloured grid cells showing distribution of cluster assignments
+
+grid.map <- tm_shape(colorsgrid.sf2, 
+                     bbox = st_bbox(StudyArea)) + 
+  tm_fill(col = 'assigned') +
+  tm_shape(StudyArea) + 
+  tm_borders(lwd = 1, 
+             col = 'black') + 
+  tm_shape(Land) +
+  tm_polygons(col = 'grey30',
+              border.col = 'grey20',
+              lwd = 0.25) +
+  # tm_compass(type = '4star',
+  #            text.color = 'grey10',
+  #            color.dark = 'grey10',
+  #            color.light = 'grey20',
+  #            position = c(0.08,0.8),
+  #            size = 1,
+  #            text.size = 1.2) +
+  tm_scale_bar(breaks = c(0,25,50,100),
+               color.dark = 'grey40',
+               color.light = 'grey10',
+               text.size = 4,
+               position = c(0.01,0.05)) +
+  tm_graticules(x = c(-65,-63,-61),
+                y = c(49,48,47,46),
+                alpha = 0.2,
+                labels.size = 1.5) +
+  tm_layout(title = 'SGSL',
+            title.position = c('right','top'),
+            title.fontface = 'bold',
+            title.size = 2,
+            bg.color = '#e0e0e0'); grid.map
+  # tm_add_legend(type = 'fill', 
+  #               labels = GULF.palette$name, 
+  #               col = GULF.palette$assigned) +
+  # tm_layout(legend.text.size = 0.78,
+  #           legend.position = c(0.57,0.78),
+  #           title = 'SGSL',
+  #           title.position = c('right','top'),
+  #           title.fontface = 'bold',
+  #           title.size = 2,
+  #           bg.color = '#e0e0e0',
+  #           legend.width = 3)
+
+saveRDS(grid.map, 'Output/ColorGrid_Gulf_tmap.rds')
+
+tmap_save(grid.map, filename = 'Output/ColourGrid_Gulf_4km_legend.tiff', compression = 'lzw')
+
+legend.map <- tm_shape(colorsgrid.sf2) +
+  tm_polygons() +
+  tm_add_legend(type = 'fill',
+                labels = GULF.palette$name,
+                col = GULF.palette$assigned,
+                title = 'SGSL') +
+  tm_layout(legend.text.size = 3,
+            legend.title.size = 4,
+            legend.only = T,
+            legend.width = 10,
+            legend.height = 5,
+            legend.title.fontface = 'bold'); legend.map
+
+saveRDS(legend.map, 'Output/tmap_legend_Gulf.rds')
+
+tmap_save(legend.map, filename = 'Output/tmap_legend_Gulf.tiff', width = 12, height = 5, unit = 'in', compression = 'lzw')
+
+# ggplot version
+
+ggmap <- ggplot() +
+  geom_sf(data = colorsgrid.sf2, 
+          aes(fill = assigned),
+          col = NA,
+          show.legend = F,
+          na.rm = T) + 
+  scale_fill_identity() +
+  geom_sf(data = StudyArea, 
+          fill = NA, 
+          col = 'black') +
+  geom_sf(data = Land, 
+          fill = 'grey30', 
+          col = 'grey20', 
+          lwd = 0.25) +
+  coord_sf(label_graticule = "SW",
+           expand = T,
+           xlim = c(280798, 720798),
+           ylim = c(5063640, 5447640)) +
+  scale_x_continuous(name = '', 
+                     breaks = c(-65,-63,-61),
+                     expand = c(0.02,0)) +
+  scale_y_continuous(name = '',
+                     breaks = c(49,48,47,46),
+                     expand = c(0.02,0)) +
+  annotation_scale(bar_cols = c('grey40','grey10'),
+                   text_cex = 1,
+                   line_col = 'grey10',
+                   location = 'bl',
+                   width_hint = 0.2,
+                   pad_y = unit(1.2, 'cm')) +
+  annotate('text', 
+           label = 'bold(SGSL)',
+           parse = T,
+           size = 6,
+           x = 685000,
+           y = 5420000) +
+  theme(panel.background = element_rect(fill = '#e0e0e0'),
+        panel.grid.major = element_line(colour = gray(0.4, alpha = 0.2)),
+        panel.border = element_rect(fill = NA, colour = 'black'),
+        plot.margin = unit(c(0,0,0,0), 'lines'),
+        axis.text = element_text(size = 12.5),
+        axis.text.y.left = element_text(hjust = 0.5, angle = 90))
+
+saveRDS(ggmap, 'Output/ColorGrid_Gulf_ggmap.rds')
+ggsave(ggmap,
+       filename = 'Output/ColourGrid_Gulf_4km_legend.tiff', 
+       compression = 'lzw',  dpi = 300,
+       width = 6.7, height = 5.8, units = 'in')
+
+# #Mapping shapefiles
+# Gulf_SA <- readOGR('Data/Shapefiles/Gulf_RVsurveyAgg.shp')
+# Land <- readOGR('Data/Shapefiles/Gulf_landborders.shp')
+# 
+# #adjust legend for map
+# legendmap<-legendcluster
+# 
+# #Plot map in projected coordinate system
+# tiff("Output/ColourGrid_Gulf4km.tiff", res=300, height=3000, width=2400)
+# par(mar = c(5,5,8,1), usr = c(255798,746002.1,5033918,5472640), xpd = NA)
+# plot(Gulf_SA)
+# plot(colorsgrid, col = as.character(colorsgrid$assigned), border = NA,add=T)
+# plot(Land, col = 'gray97', border = 'gray10', add = T)
+# axis(1,at = c(300000,500000,700000), pos = 5033918, tick = T)
+# axis(2,at = c(5100000,5250000,5400000), pos = 255798, tick = T)
+# plot(extent(Land), add = T)
+# legend(x = 590000, y = 5455000 , legend = legendmap$cl_name,
+#        fill = as.character(legendmap$assigned),  bty = "n", cex = 0.85)
+# dev.off()
 
 #write csv file for SiteXSpecies matrix with cluster and color assignments
 SiteXSpecies2 <- SiteXSpecies
