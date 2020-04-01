@@ -132,7 +132,7 @@ close(rmlist)
 
 #import predictor variables retained for modelling
 
-raster.list <- list.files(path = 'Data/Rasters/', pattern = 'NL', full.names = T) #get list of raster files
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'NL.+tif$', full.names = T) #get list of raster files
 retained_vars <- readLines(file('Output/NL_retain_list.txt'))#list of retained variables
 NL_SA <- readOGR('Data/Shapefiles/NL_RVsurveyAgg.shp') # NL_SA (RV survey boundaries)
 LandBuffer <- readOGR('Data/Shapefiles/NL_LandBuffer_5km.shp') # 5km buffer around land points
@@ -153,18 +153,18 @@ NLGrid_populated <- NLGrid_populated[-which(NLGrid_populated@data$cl %in% minor_
 #Extract raster values at each populated grid cell
 p.data <- raster::extract(env_pred,NLGrid_populated, factors = T, nl = nlayers(env_pred), df = T) #extract values into df
 RF.data <- data.frame(coordinates(NLGrid_populated), NLGrid_populated@data, p.data[,-1]) #join environmental data with grid df
-RF.data <- RF.data %>% rename(., x = X1, y = X2)
-missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
-table(missing.data$cl) #Inner shelf mostly effected by incomplete cases (26)
+RF.data <- RF.data %>% dplyr::rename(., x = X1, y = X2)
+missing.data <-  RF.data[!complete.cases(RF.data),]#incomplete cases
+table(missing.data$cl) #Inner shelf mostly affected by incomplete cases (41)
 RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
 RF.data <- droplevels(RF.data) #drop unused factor levels from dataframe & recode retained factors
-RF.data$cl <- recode_factor(RF.data$cl, `9` = '1', `11` = '2', `8` = '3', `1` = '4', `4` = '5')
+RF.data$cl <- recode_factor(RF.data$cl, `7` = '1', `8` = '2', `6` = '3', `1` = '4', `4` = '5')
 
 #build model
 
 # specify model formula
 formula <-  as.formula(paste('cl','~',paste(retained_vars, collapse = '+'))) 
-#fit model, 15.26% OOB error rate although Inner shelf cluster has higher OOB (19.98%)
+#fit model, 15.2% OOB error rate although Inner shelf cluster has higher OOB (19.98%), Slope has lowest (7.37%)
 RF.mod1 <- randomForest(formula, data = RF.data, ntree = 10000, importance = T) 
 RF.output <- saveRDS(RF.mod1, 'Output/NL_RF_model.rds')
 
@@ -208,7 +208,9 @@ varImp <- gather(varImp, 'class', 'MeanDecreaseAccuracy', 1:6)
 varImp$class <- factor(varImp$class, levels = c('Whole Model','Inner Shelf', 'Outer Shelf', 'Grand Banks',
                                                 'Slope','Laurentian Channel/\nShelf Break'))
 
-tiff('Output/NL_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300)                                                                                                
+# faceted by cluster
+
+tiff('Output/NL_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300, compression = 'lzw')                                                                                                
 p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   geom_point(stat = 'identity') +
   facet_grid(~class) +
@@ -218,6 +220,22 @@ p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   theme(axis.text.x = element_text(angle = 90), 
         text = element_text(size = 10)); p1
 dev.off()
+
+saveRDS(p1, 'Output/NL_VarImpPlot.rds')
+
+# Whole model only
+
+varImp$class2 <- factor(varImp$class, labels = c('NL',NA,NA,NA,NA,NA))
+p2 <- ggplot(varImp[varImp$class == 'Whole Model',], aes(x = predictor, y = MeanDecreaseAccuracy)) +
+  geom_point(stat = 'identity') +
+  facet_grid(~class2) +
+  theme_bw() +
+  coord_flip() +
+  labs(x = NULL, y = 'Mean Decrease in Accuracy') + 
+  theme(axis.text.x = element_text(angle = 90), 
+        text = element_text(size = 10)); p2
+
+saveRDS(p2, 'Output/NL_VarImpPlot_WM.rds')
 
 ####Highlighting areas of lower model certainty####
 
@@ -242,8 +260,8 @@ VoteCountsRaster <- setValues(VoteCountsRaster, as.vector(VoteCounts$maxVC))
 VoteCountsShape0.5 <- rasterToPolygons(VoteCountsRaster, fun = function(x){x<0.5}, na.rm = T)
 VoteCountsShape0.7 <- rasterToPolygons(VoteCountsRaster, fun = function(x){x<0.7}, na.rm = T)
 #write SPDFs to new shapefiles
-writeOGR(VoteCountsShape0.5, dsn = 'Output', layer = 'NL_RF_uncertainty_0.5', driver = 'ESRI Shapefile') 
-writeOGR(VoteCountsShape0.7, dsn = 'Output', layer = 'NL_RF_uncertainty_0.7', driver = 'ESRI Shapefile') 
+writeOGR(VoteCountsShape0.5, dsn = 'Output', layer = 'NL_RF_uncertainty_0.5', driver = 'ESRI Shapefile', overwrite_layer = T) 
+writeOGR(VoteCountsShape0.7, dsn = 'Output', layer = 'NL_RF_uncertainty_0.7', driver = 'ESRI Shapefile', overwrite_layer = T) 
 
 ####Evaluate uncertainty threshold  by examining relationship between assignment probability and success of prediction####
 
@@ -270,7 +288,8 @@ plot(uncertainty$correct ~ uncertainty$maxVC) #examine relationship between assi
 
 ####Distribution of important variables across cluster####
 
-my.colors = c("#a6cee3", "#1f78b4","#ff7f00", "#e6ab02", "#6a3d9a") # color scheme for clusters
+source('Code/SPERA_colour_palettes.R')
+my.colors = NL.palette$assigned[1:5] # color scheme for clusters
 
 #boxplot for depth
 box_depth <- ggplot(RF.data, aes(x = cl,y = bathy, fill = cl)) +
@@ -279,7 +298,7 @@ box_depth <- ggplot(RF.data, aes(x = cl,y = bathy, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = 'Depth (m)') +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12),
+  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 14),
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_depth
 
@@ -290,7 +309,7 @@ box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('   Average min\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(colour = 'white'), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_minT
 
@@ -299,10 +318,10 @@ box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
   geom_boxplot(show.legend = F) +
   theme_classic() +
   scale_fill_manual(values = my.colors) +
-  scale_y_continuous(limits = c(0,16)) +
+  scale_y_continuous(limits = c(0,11)) +
   labs(x = NULL, y = expression(paste('   Average max\ntemperature (\u00B0C)'))) +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_maxT
 
@@ -313,7 +332,7 @@ box_ranSal <- ggplot(RF.data, aes(x = cl,y = range_ann_BSal, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Average range salinity (\u2030)'))) +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_ranSal
 
@@ -324,7 +343,7 @@ box_win_chl <- ggplot(RF.data, aes(x = cl,y = avg_mn_win_chl, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Mean winter chlorophyll (mg m  '^-3,')'))) +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_win_chl
 
@@ -335,7 +354,7 @@ box_DO <- ggplot(RF.data, aes(x = cl,y = dissox, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Dissolved oxygen (mg L '^-1,')'))) +
   scale_x_discrete(labels = c('Inner Shelf', 'Outer Shelf', 'Grand Banks', 'Slope','LC/Shelf Break')) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,0,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_DO
 
@@ -350,7 +369,7 @@ r1 <- cbind(g1, g3, size = 'first') #bind/align plot elements of row 1
 r2 <- cbind(g2, g4, size = 'first') #bind/align plot elements of row 2
 g <- rbind(r1, r2, size = 'first') #bind/align plot elements of both rows
 
-tiff('Output/NL_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300)
+tiff('Output/NL_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300, compression = 'lzw')
 plot(g)
 dev.off()
 
