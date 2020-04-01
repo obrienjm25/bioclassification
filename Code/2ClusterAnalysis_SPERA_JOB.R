@@ -13,9 +13,26 @@
 ## Adapted code for Biological classification analysis - Eastern Canadian groundfish - Stanley, Heaslip, Jeffery, O'Brien
 #########################################
 
-pkgs <- list('vegan', 'simba', 'maptools', 'pvclust', 'dendroextras', 'dendextend', 'reshape', 'reshape2', 'dplyr', 'tidyr', 'NbClust', 'rgdal')
-invisible(lapply(pkgs, library, character.only = T))
-
+library(vegan)
+library(simba)
+library(maptools)
+library(pvclust)
+library(dendroextras)
+library(dendextend)
+library(dendroextras)
+library(reshape)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(rgdal)
+library(NbClust)
+library(ggplot2)
+library(ggdendro)
+library(sf)
+library(tmap)
+library(raster)
+library(ggplot2)
+library(ggsn)
 
 ##############################
 # CLUSTER ANALYSIS STARTS
@@ -56,9 +73,9 @@ cor(grid.pa.gow, copCor.gow)
 
 #compare fit of multiple cluster algorithms
 
-cl.alg <- c('ward.D', 'ward.D2','sin','com', 'ave','mcq','med','cen')
+cl.alg <- c('ward.D2','sin','com', 'ave','mcq','med','cen')
 
-for (i in 1:6){
+for (i in 1:7){
   cl.alg.temp <- cl.alg[i]
   benthtree.temp <- hclust(grid.pa.simp, method = cl.alg.temp)
   print(paste(cl.alg.temp, cor(grid.pa.simp, cophenetic(benthtree.temp)), sep = " "))
@@ -80,56 +97,63 @@ seth<-0.587 #use my choice - more informative biologically
 cl<-dendroextras::slice(benthtree, h=seth) #Cut tree
 
 ###
-colorcount<-as.data.frame(table(cl)) #get Table of cluster memberships
-colorcount #Number of sites in each cluster # 17 clusters with 0.58 cut-off
-colorcount <-colorcount[order(-colorcount$Freq),] #order by frequency
-colorcount
-setfreq<-min(colorcount$Freq[1:6], na.rm=T) #Select the first 6 clusters to be color-coded
+colorcount<-as.data.frame(table(cl)) %>%  #get Table of cluster memberships
+  arrange(desc(Freq)) %>% #order by frequency
+  print() #Number of sites in each cluster # 9 clusters with 0.587 cut-off
+
+filter(colorcount, Freq >= 20) %>% nrow() # 6 major clusters (>= 20 sites)
 
 #Count the number of sites in the top clusters
-sum(colorcount$Freq[1:6]) # 2494 sites in top 6 clusters at 0.585 cut-off
 
-# #Set Colors for top 6 clusters (SubBiomes)
-colorscheme<-c("#a6cee3", #lblue
-               "#1f78b4",#dblue
-               "#ff7f00", #orange
-               "#33a02c", #green
-               "#6a3d9a", #purple
-               "#e6ab02") #yellow
+sum(colorcount$Freq[colorcount$Freq>= 20]) # 2520 sites in top 6 clusters at 0.587 cut-off
+
+# Set Colors for top 6 clusters (SubBiomes)
+
+source('Code/SPERA_colour_palettes.R')
 
 #Assign colours to clusters
 
-colorcount$assigned[colorcount$Freq<setfreq]<-"#e0e0e0" #set all clusters that occur at less than the assigned cut off (6 clusters) to grey
-colorcount$assigned[1:6] <- colorscheme
-colorcount <- colorcount[order(colorcount$cl),]
-
-colorcount #Each cluster is assigned a color
-table(colorcount$assigned)
+colorcount <- left_join(colorcount, MAR.palette) %>% 
+  replace_na(list(assigned = "#e0e0e0", name = "Unclassified")) %>% #set all clusters that occur < cut-off to grey
+  arrange(cl) %>% #order by cluster ID
+  print() #Each cluster is assigned a color
 
 #Create color-coded dendrogram
-colortree<-colour_branches(benthtree, h=seth,col=as.character(colorcount$assigned))
+colortree<-colour_branches(benthtree, h=seth,col=colorcount$assigned) %>%   
+  as.ggdend() %>% 
+  segment() %>% 
+  replace_na(list(col = '#000000')) %>% 
+  left_join(., colorcount, by = c('col' = 'assigned')) %>% 
+  mutate(lwd = if_else(col == '#000000', 0.75, 0.5))
 
-#create legend
-colorcount2<-subset(colorcount, Freq>=setfreq) #Select top 6 clusters
-colorcount2$cl<-as.character(colorcount2$cl)
-colorcount2$Freq<-as.numeric(colorcount2$Freq)
-colorcount2<-colorcount2[order(-colorcount2$Freq),] #order by frequency
-colorcount2$Freq<-as.character(colorcount2$Freq) 
-new<-c("others", paste("<", setfreq), "#e0e0e0") #add a column for the other clusters (less than top 6 - color them grey)
-legendcluster<-rbind(colorcount2, new)
-legendcluster$cl_name <- c("WSS/Outer BoF","WSS: Banks/Inner BoF","ESS","ESS: Banks","Laurentian Channel/Shelf Break","Slope","Other") 
-legendcluster #legend
-
-#Print dendrogram
-# #small - pub 
-# tiff("Output/Dendrogram_Maritimes4km_large.tiff", res=350, height=8, width=14, units="cm", pointsize=7)
-#large - csas
-# tiff("Output/Dendrogram_Maritimes4km_large.tiff", res=300, height=2000, width=3800)
-
-plot(colortree,xlab="", ylab="Simpson Distance", leaflab = "none")
-
-# dev.off()
-
+gg.colortree <- ggplot(colortree) + 
+  theme_classic() +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend, colour = col, size = lwd),
+               lineend = 'square',
+               linejoin = 'bevel') +
+  scale_size_identity() +
+  scale_color_identity('', 
+                       guide = 'legend', 
+                       breaks = MAR.palette$assigned, 
+                       labels = MAR.palette$name) +
+  guides(col = guide_legend(override.aes = list(size = 2))) +
+  scale_y_continuous(name = 'Simpson Distance', limits = c(0,1), expand = c(0,0)) +
+  labs(tag = 'MAR') +
+  theme(legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = 'white', colour = 'white'),
+        legend.position = 'bottom',
+        legend.justification = c(0,1),
+        legend.direction = 'vertical',
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        axis.line.x = element_line(colour = 'white'),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.tag = element_text(face = 'bold', size = 16),
+        plot.tag.position = c(0.8,0.92)); gg.colortree
+ 
+saveRDS(gg.colortree, 'Output/ggDendrogram_MAR.rds') 
 
 ###plot this cluster analysis on map
 #import the subsetted grid (grid cells for which we had data) that we wrote earlier
@@ -141,64 +165,153 @@ colorcountmap<-colorcount
 id <-names(cl)
 colors<-as.data.frame(cbind(id, cl))
 head(colors) #each grid cell is assigned its cluster
-colorsmerge<-merge(grid, colors, by="id")
-head(colorsmerge@data) #join this to the shapefile
-colorsmerge2<-merge(colorsmerge, colorcountmap, by="cl")
+colorsmerge<-merge(grid, colors, by="id") #join this to the shapefile
+head(colorsmerge@data) 
+colorsmerge2<-merge(colorsmerge, colorcountmap, by="cl") # merge with assigned cluster colours and names
 head(colorsmerge2@data)#each grid cell is assigned its color to match the dendrogram
 colorsgrid<-subset(colorsmerge2,!is.na(colorsmerge2$cl)) #drop grid cells for which we had data, but which got dropped at the rare species/barren sites stage
 head(colorsgrid@data)
 colorGridData<-colorsgrid@data
 
 #set coordinate system and project
-proj4string(colorsgrid)<-CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0") #set coordinate reference system
+crs(colorsgrid)<-CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0") #set coordinate reference system
 #write shapefile with cluster and color assignment attributes for 4 km subgrid
-writeOGR(colorsgrid, dsn = 'Data/Shapefiles', layer = 'GridClusterAssignment4km_Maritimes', driver = "ESRI Shapefile")
+writeOGR(colorsgrid, dsn = 'Data/Shapefiles', layer = 'GridClusterAssignment4km_Maritimes', driver = "ESRI Shapefile", overwrite_layer = T)
 
-#Mapping shapefiles
-MaritimeRegion <- readOGR("Data/MaritimesPlanningRegion/MaritimesPlanningArea.shp")
-MaritimeProj <- spTransform(MaritimeRegion,CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
-RVSurvey <- readOGR("Data/Shapefiles/MaritimesStudyArea.shp")
-Land <- readOGR("Data/Shapefiles/LandBordersMaritimes.shp")
+# Read in other mapping shapefiles
 
-#adjust legend for map
-legendmap<-legendcluster
+StudyArea <- st_read('Data/Shapefiles/MaritimesRasterBoundary.shp')
+landfiles <- list.files(pattern = 'gadm', full.names = T) %>% 
+  discard(~ grepl('FRA', .x)) %>% 
+  discard(~ grepl('_0_', .x))
+admin.borders <- map(landfiles, readRDS) %>% 
+  map(., st_as_sf) %>% 
+  rbindlist() %>% 
+  st_as_sf() %>% 
+  st_crop(., c(xmin = -71, ymin = 39, xmax = -45, ymax = 59)) %>% 
+  st_transform(., crs = 26920)
 
-#Plot map in projected coordinate system
-tiff("Output/ColourGrid_Maritimes4km.tiff", res=300, height=3000, width=2400)
-plot(RVSurvey, col = 'gray97')
-plot(colorsgrid, col = as.character(colorsgrid$assigned), border = NA,add=T)
-plot(Land, col = 'beige', add = T)
-dev.off()
+#convert colorsgrid to simple features object
+colorsgrid.sf <- st_as_sf(colorsgrid) %>% # convert to sf
+  st_cast("MULTIPOLYGON") %>% #cast to multipolygon geometry
+  st_transform(., crs = 26920) %>% 
+  st_intersection(StudyArea, .) # remove grid cells outside study boundary
 
-#plot map unprojected
+# Plot map of coloured grid cells showing distribution of cluster assignments
 
-library(raster)
-colorsgrid.Proj <- spTransform(colorsgrid, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-RVsurvey.Proj <- spTransform(RVSurvey, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))                              
-MaritimesProj2 <- spTransform(MaritimeRegion, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-Land.Proj <- spTransform(Land, CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-Land.Proj <- crop(Land.Proj, extent(c(-68.25,-54.5,39.25,48.6)))
-canada <- raster::getData("GADM", country = "CAN", level = 1)
-QC.NFLD.PEI <- c("Newfoundland and Labrador", "Prince Edward Island", "Qu\u{e9}bec")
-canada <- canada[canada$NAME_1 %in% QC.NFLD.PEI,]
-canada <- crop(canada, extent(c(-68.25,-54.5,39.25,48.6)))
+grid.map <- tm_shape(colorsgrid.sf, 
+                     bbox = st_bbox(c(xmin =20000, 
+                                      ymin = 4562134, 
+                                      xmax = 1029435, 
+                                      ymax = 5300000))) + 
+  tm_fill(col = 'assigned') + 
+  tm_shape(StudyArea) + 
+  tm_borders(lwd = 1, 
+             col = 'black') + 
+  tm_shape(admin.borders) +
+  tm_polygons(col = 'grey30',
+              border.col = 'grey20',
+              lwd = 0.25) +
+  # tm_compass(type = '4star',
+  #            text.color = 'grey10',
+  #            color.dark = 'grey10',
+  #            color.light = 'grey20',
+  #            position = c(0.08,0.8),
+  #            size = 1,
+  #            text.size = 1.2) +
+  tm_scale_bar(breaks = c(0,50,100,200),
+               color.dark = 'grey40',
+               color.light = 'grey10',
+               text.size = 4,
+               position = c(0.01,0.90)) +
+  tm_graticules(x = c(-67,-63,-59),
+                y = c(47,45,43,41),
+                alpha = 0.2,
+                labels.size = 1.5) +
+  tm_layout(title = 'MAR',
+            title.position = c('right','top'),
+            title.fontface = 'bold',
+            title.size = 2,
+            bg.color = '#e0e0e0',
+            inner.margins = c(0,0,0,0)); grid.map
+  # tm_add_legend(type = 'fill', 
+  #               labels = MAR.palette$name, 
+  #               col = MAR.palette$assigned) +
+  # tm_layout(legend.text.size = 0.95,
+  #           legend.position = c(0.01, 0.61),
+  #           title = 'MAR',
+  #           title.position = c('right','top'),
+  #           title.fontface = 'bold',
+  #           title.size = 2,
+  #           bg.color = '#e0e0e0',
+  #           legend.width = 3)
 
-library(prettymapr)
-par(mar = c(4,5,1,1), usr = c(-68.25,-54.5,39.25,48.6), xpd = NA)
-plot(MaritimesProj2, border = NA)
-plot(RVsurvey.Proj, add = T)
-axis(1,at = c(-68,-64,-60,-56), pos = 39.25, tick = T,
-     labels = c(expression(paste("68",degree," W",sep='')),expression(paste("64",degree," W",sep='')),expression(paste("60",degree," W",sep='')),expression(paste("56",degree," W",sep=''))))
-axis(2,at = c(40,42,44,46,48), pos = -68.25, tick = T,
-     labels = c(expression(paste("40",degree," N",sep='')),expression(paste("42",degree," N",sep='')),expression(paste("44",degree," N",sep='')),expression(paste("46",degree," N",sep='')),expression(paste("48",degree," N",sep=''))))
-plot(colorsgrid.Proj, col = as.character(colorsgrid.Proj$assigned), border = NA,add=T)
-plot(canada, col = 'gray97', border = 'gray10', add = T)
-plot(Land.Proj, col = 'gray97', border = 'gray10', add = T)
-plot(extent(-68.25,-54.5,39.25,48.6), add = T)
-addnortharrow(pos = 'bottomleft', scale = 0.35)
-addscalebar(pos = 'bottomright', htin =0.1,widthhint=0.3)
-legend(x = -61.8, y = 42.6, legend = legendmap$cl_name,
-       fill = as.character(legendmap$assigned),  bty = "n", cex = 0.85)
+saveRDS(grid.map, 'Output/ColorGrid_MAR_tmap.rds')
+
+tmap_save(grid.map, filename = 'Output/ColourGrid_Maritimes4km_legend.tiff', compression = 'lzw')
+
+legend.map <- tm_shape(colorsgrid.sf) +
+  tm_polygons() +
+  tm_add_legend(type = 'fill',
+                labels = MAR.palette$name,
+                col = MAR.palette$assigned,
+                title = 'MAR') +
+  tm_layout(legend.text.size = 3,
+            legend.title.size = 4,
+            legend.only = T,
+            legend.width = 10,
+            legend.height = 5,
+            legend.title.fontface = 'bold'); legend.map
+
+saveRDS(legend.map, 'Output/tmap_legend_MAR.rds')
+
+tmap_save(legend.map, filename = 'Output/tmap_legend_MAR.tiff', width = 10, height = 5, unit = 'in', compression = 'lzw')
+
+#ggplot version
+
+ggmap <- ggplot() +
+  geom_sf(data = colorsgrid.sf, 
+          aes(fill = assigned),
+          col = NA,
+          show.legend = F,
+          na.rm = T) + 
+  scale_fill_identity() +
+  geom_sf(data = StudyArea,
+          fill = NA, 
+          col = 'black') +
+  geom_sf(data = admin.borders, 
+          fill = 'grey30',
+          col = 'grey20', 
+          lwd = 0.25) +
+  coord_sf(label_graticule = "SE",
+           expand = F,
+           xlim = c(0, 1040000),
+           ylim = c(4530000, 5300000)) +
+  scale_x_continuous(name = '', breaks = c(-67,-63,-59)) +
+  scale_y_continuous(name = '',breaks = c(47,45,43,41)) +
+  annotate('text', 
+           label = 'bold(MAR)',
+           parse = T,
+           size = 6,
+           x = 920000,
+           y = 5220000) +
+  annotation_scale(bar_cols = c('grey40','grey10'),
+                   text_cex = 1,
+                   line_col = 'grey10',
+                   location = 'tl',
+                   pad_y = unit(0.5, 'cm')) +
+  theme(panel.background = element_rect(fill = '#e0e0e0'),
+        panel.grid.major = element_line(colour = gray(0.4, alpha = 0.2)),
+        plot.margin = unit(c(0,0,0,0), 'lines'),
+        panel.border = element_rect(fill = NA, colour = 'black'),
+        axis.text = element_text(size = 12.5),
+        axis.text.y.right = element_text(hjust = 0.5, angle = 270))
+
+saveRDS(ggmap, 'Output/ColorGrid_MAR_ggmap.rds')
+ggsave(ggmap, 
+       filename = 'Output/ColourGrid_Maritimes4km_legend.tiff',
+       compression = 'lzw', dpi = 300,
+       width = 8, height = 5.8, unit = 'in')
 
 #write csv file for SiteXSpecies matrix with cluster and color assignments
 SiteXSpecies2 <- SiteXSpecies
