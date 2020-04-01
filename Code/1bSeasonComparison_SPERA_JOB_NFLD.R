@@ -1,3 +1,6 @@
+pkgs <- list("maptools", "plyr", "rgdal", "sp", "reshape", "reshape2", "tidyr", "dplyr", "raster", "rgeos", "ggplot2", "ggmap", "spatstat")
+invisible(lapply(pkgs, library, character.only = T))
+
 #Import data 
 
 load("Data/NfldData.RData")
@@ -89,11 +92,41 @@ Nfld.ano <- anosim(Nfld_bc_diss, anosim_groups) #ANOSIM comparing seasons
 summary(Nfld.ano) #significant (p = 0.001) of season
 hist(Nfld.ano$perm) #distribution of permuted R values is shift to left. Could indicate difference in dispersion rather than location
 mds_seasons <- labdsv::nmds(Nfld_bc_diss, k = 2) #visualize with nmds
+mds_seasons <- metaMDS(sitexspecies, 
+                      k = 2, 
+                      distfun = sim, 
+                      distance = 'simpson', 
+                      zerodist = 'ignore')
+mds_seasons2 <- metaMDS(sitexspecies, 
+                        previous.best = mds_seasons, 
+                        trymax = 100)
+mds_seasons2 <- metaMDS(sitexspecies, 
+                        previous.best = mds_seasons2,
+                        trymax = 100,
+                        sfgrmin = 1e-8)
+saveRDS(mds_seasons2, 'Output/Nfld_mds_k2.rds')
+
+mds_seasons3 <- metaMDS(sitexspecies, 
+                        previous.best = mds_seasons2,
+                        trymax = 500,
+                        sfgrmin = 1e-9,
+                        sratmax = 0.999999)
+
+df.seasons <- data.frame(mds_seasons2[['points']], season = combined_seasons$season) %>% 
+  dplyr::rename(NMDS1 = MDS1, NMDS2 = MDS2)
+
+library(ggplot2)
+
+p.mds <- ggplot(df.seasons, aes(x = NMDS1, y = NMDS2)) +
+  geom_point(aes(col = season)) +
+  guides(color = guide_legend('Season'))
+
+ggsave(plot = p.mds, 'Output/nfld_mds.tiff', width = 5, height = 4, units = 'in', dpi = 300)
 saveRDS(mds_seasons2, 'Output/Nfld_mds_k3.rds')
 mds_seasons2b <- metaMDS(Nfld_bc_diss, k = 3, trymax = 100, sratmax = 0.999999) #visualize with nmds
 mds_seasons2b <- metaMDS(Nfld_bc_diss, k = 3, trymax = 100, previous.best = mds_seasons2, sratmax = 0.999999)
-points(mds_seasons[['points']][1:1848,], col = 'red') #seems to be a lot of overlap
-points(mds_seasons[['points']][1848:3883,], col = 'blue') #small difference in location, but large samples?
+points(mds_seasons2[['points']][1:1848,], col = 'red') #seems to be a lot of overlap
+points(mds_seasons2[['points']][1848:3883,], col = 'blue') #small difference in location, but large samples?
 
 #try PERMANOVA with smaller sample (n = 50) for each season
 
