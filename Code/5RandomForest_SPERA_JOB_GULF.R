@@ -133,7 +133,7 @@ close(rmlist)
 
 #import predictor variables retained for modelling
 
-raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Gulf', full.names = T) #get list of raster files
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'Gulf.+tif$', full.names = T) #get list of raster files
 Gulf_SA <- readOGR('Data/Shapefiles/Gulf_RVsurveyAgg.shp') # Gulf_SA (RV survey boundaries)
 LandBuffer <- readOGR('Data/Shapefiles/Gulf_LandBuffer_5km.shp') # 5km buffer around land points
 retained_vars <- readLines(file('Output/Gulf_retain_list.txt'))#list of retained variables
@@ -154,8 +154,8 @@ GulfGrid_populated <- GulfGrid_populated[-which(GulfGrid_populated@data$cl %in% 
 #Extract raster values at each populated grid cell
 p.data <- raster::extract(env_pred,GulfGrid_populated, factors = T, nl = nlayers(env_pred), df = T) #extract values into df
 RF.data <- data.frame(coordinates(GulfGrid_populated), GulfGrid_populated@data, p.data[,-1]) #join environmental data with grid df
-RF.data <- RF.data %>% rename(., x = X1, y = X2)
-missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
+RF.data <- RF.data %>% dplyr::rename(., x = X1, y = X2)
+missing.data <- RF.data[!complete.cases(RF.data),]#incomplete cases
 table(missing.data$cl) #Inshore/MI and NS/SGB mostly effected by incomplete cases (11 & 8)
 RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
 RF.data <- droplevels(RF.data) #drop unused factor levels from dataframe & recode retained factors
@@ -197,19 +197,20 @@ varImp <- data.frame(importance(RF.mod1, scale = F))
 varImp$predictor <- c('Aspect','Avg max PP (spring/summer)', 'BPI (1 km)', 'BPI (20 km)',
                       'Avg max temperature', 'Avg max current velocity (NS)',
                       'Avg min temperature','Avg min SST','Avg mean temperature',
-                      'Avg mean bottom stress', 'Average mean MLD', 'Avg mean current velocity (EW)', 
-                      'Avg mean current velocity (NS)', 'Average mean MLD (summer)',
+                      'Avg mean bottom stress', 'Avg mean MLD', 'Avg mean current velocity (EW)', 
+                      'Avg mean current velocity (NS)', 'Avg mean MLD (summer)',
                       'Avg mean SST (winter)', 'Slope')
 varImp <- varImp[order(-varImp$MeanDecreaseAccuracy),]
 varImp$predictor <- factor(varImp$predictor, 
                            levels = varImp$predictor[order(varImp$MeanDecreaseAccuracy)])
-colnames(varImp)[1:5] <- c("Magdalen Shallows/\nChaleur Bay","Inshore/\nMagdalen Is.","Laurentian Channel", 
+colnames(varImp)[1:5] <- c("Magdalen Shallows","Inshore/\nMagdalen Is.","Laurentian Channel", 
                            "Northumberland Strait/\nSt. George's Bay","Whole Model")
 varImp <- gather(varImp, 'class', 'MeanDecreaseAccuracy', 1:5)
-varImp$class <- factor(varImp$class, levels = c('Whole Model',"Magdalen Shallows/\nChaleur Bay","Inshore/\nMagdalen Is.",
+varImp$class <- factor(varImp$class, levels = c('Whole Model',"Magdalen Shallows","Inshore/\nMagdalen Is.",
                                                 "Laurentian Channel", "Northumberland Strait/\nSt. George's Bay"))
+# faceted by cluster
 
-tiff('Output/Gulf_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300)                                                                                                
+tiff('Output/Gulf_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300, compression = 'lzw')                                                                                                
 p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   geom_point(stat = 'identity') +
   facet_grid(~class) +
@@ -219,6 +220,21 @@ p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   theme(axis.text.x = element_text(angle = 90), 
         text = element_text(size = 10)); p1
 dev.off()
+
+saveRDS(p1, 'Output/Gulf_VarImpPlot.rds')
+
+# Whole model only
+varImp$class2 <- factor(varImp$class, labels = c('SGSL',NA,NA,NA,NA))
+p2 <- ggplot(varImp[varImp$class == 'Whole Model',], aes(x = predictor, y = MeanDecreaseAccuracy)) +
+  geom_point(stat = 'identity') +
+  facet_grid(~class2) +
+  theme_bw() +
+  coord_flip() +
+  labs(x = NULL, y = 'Mean Decrease in Accuracy') + 
+  theme(axis.text.x = element_text(angle = 90), 
+        text = element_text(size = 10)); p2
+
+saveRDS(p2, 'Output/Gulf_VarImpPlot_WM.rds')
 
 ####Highlighting areas of lower model certainty####
 
@@ -271,7 +287,8 @@ plot(uncertainty$correct ~ uncertainty$maxVC) #examine relationship between assi
 
 ####Distribution of important variables across cluster####
 
-my.colors <- c("#a6cee3", "#ff7f00", "#6a3d9a", "#1f78b4") # color scheme for clusters
+source('Code/SPERA_colour_palettes.R')
+my.colors <- GULF.palette$assigned[1:4] # color scheme for clusters
 
 #boxplot for max ann bottom temp
 box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
@@ -280,7 +297,7 @@ box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   scale_y_continuous(limits = c(0,25)) +
   labs(x = NULL, y = expression(paste('   Avg max\ntemperature (\u00B0C)'))) +
-  theme(axis.text.x = element_blank(), text = element_text(size = 12), 
+  theme(axis.text.x = element_blank(), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_maxT
 
@@ -291,7 +308,7 @@ box_meanT <- ggplot(RF.data, aes(x = cl,y = mn_ann_BT, fill = cl)) +
   scale_fill_manual(values = my.colors) +
   scale_y_continuous(limits = c(0,10)) +
   labs(x = NULL, y = expression(paste('   Avg mean\ntemperature (\u00B0C)'))) +
-  theme(axis.text.x = element_blank(), text = element_text(size = 12), 
+  theme(axis.text.x = element_blank(), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_meanT
 
@@ -301,9 +318,9 @@ box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
   theme_classic() +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('   Avg min\ntemperature (\u00B0C)'))) +
-  scale_x_discrete(labels = c("Magdalen Shallows\n& Chaleur Bay", "Inshore/Magdalen Is.",
+  scale_x_discrete(labels = c("Magdalen Shallows", "Inshore/Magdalen Is.",
                               "Laurentian Channel","N. Strait &\n St. George's Bay")) +
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_minT
 
@@ -313,9 +330,9 @@ box_PP <- ggplot(RF.data, aes(x = cl,y = avg_max_sprsum_PP, fill = cl)) +
   theme_classic() +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(Avg~max~PP~'('*mg~C~m^{-2}~day^{-1}*')')) +
-  scale_x_discrete(labels = c("Magdalen Shallows\n& Chaleur Bay", "Inshore/Magdalen Is.",
+  scale_x_discrete(labels = c("Magdalen Shallows", "Inshore/Magdalen Is.",
                               "Laurentian Channel","N. Strait &\n St. George's Bay")) +
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_PP
 
@@ -331,7 +348,7 @@ c1 <- rbind(g1, g3, size = 'first') #bind/align plot elements of column 1
 c2 <- rbind(g2, g4, size = 'first') #bind/align plot elements of column 2
 g <- cbind(c1, c2, size = 'first') #bind/align plot elements of both rows
 
-tiff('Output/Gulf_EnvVariation.tiff', width = 14, height = 8, units = 'in', res = 300)
+tiff('Output/Gulf_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300, compression = 'lzw')
 plot(g)
 dev.off()
 
