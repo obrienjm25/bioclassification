@@ -133,7 +133,7 @@ close(rmlist)
 
 #import predictor variables retained for modelling
 
-raster.list <- list.files(path = 'Data/Rasters/', pattern = 'QC', full.names = T) #get list of raster files
+raster.list <- list.files(path = 'Data/Rasters/', pattern = 'QC.+tif$', full.names = T) #get list of raster files
 retained_vars <- readLines(file('Output/QC_retain_list.txt'))#list of retained variables
 QC_SA <- readOGR('Data/Shapefiles/QC_StudyArea.shp') # QC_SA (RV survey boundaries)
 LandBuffer <- readOGR('Data/Shapefiles/QC_LandBuffer_5km.shp') # 5km buffer around land points
@@ -156,9 +156,9 @@ QCGrid_populated <- QCGrid_populated[-which(QCGrid_populated@data$cl %in% minor_
 #Extract raster values at each populated grid cell
 p.data <- raster::extract(env_pred,QCGrid_populated, factors = T, nl = nlayers(env_pred), df = T) #extract values into df
 RF.data <- data.frame(coordinates(QCGrid_populated), QCGrid_populated@data, p.data[,-1]) #join environmental data with grid df
-RF.data <- RF.data %>% rename(., x = X1, y = X2)
+RF.data <- RF.data %>% dplyr::rename(., x = X1, y = X2)
 missing.data <- missingdata <- RF.data[!complete.cases(RF.data),]#incomplete cases
-table(missing.data$cl) #Nearshore clusters mostly effected by incomplete cases (25 missing cases)
+table(missing.data$cl) #Nearshore clusters mostly effected by incomplete cases (35 missing cases)
 RF.data <- RF.data[complete.cases(RF.data),] #remove incomplete cases
 RF.data <- droplevels(RF.data) #drop unused factor levels from dataframe & recode retained factors
 RF.data$cl <- recode_factor(RF.data$cl, '6' = '1', '1' = '2', '7' = '3')
@@ -197,17 +197,19 @@ writeOGR(as(raster_boundary, 'SpatialPolygonsDataFrame'), dsn = 'Data/Shapefiles
 
 varImp <- data.frame(importance(RF.mod1, scale = F))
 varImp$predictor <- c('Aspect','Avg max PP (spring/summer)', 'Avg mean chl (winter)','BPI (1 km)', 'BPI (20 km)',
-                      'Dissolved oxygen','Avg max BT', 'Avg max SST', 'Avg min BT', 
+                      'DO','Avg max temperature', 'Avg max SST', 'Avg min temperature', 
                       'Avg min SST','Avg mean bottom stress', 'Avg mean MLD','Avg mean current velocity (EW)', 
                       'Avg mean current velocity (NS)', 'pH', 'Slope')
 varImp <- varImp[order(-varImp$MeanDecreaseAccuracy),]
 varImp$predictor <- factor(varImp$predictor, 
                            levels = varImp$predictor[order(varImp$MeanDecreaseAccuracy)])
-colnames(varImp)[1:4] <- c("Deep Channels","Shallow Banks & Straits","Channel Heads & Slopes", "Whole Model")
+colnames(varImp)[1:4] <- c("Deep Channels","Shallow Banks &\nStraits","Channel Heads &\nSlopes", "Whole Model")
 varImp <- gather(varImp, 'class', 'MeanDecreaseAccuracy', 1:4)
-varImp$class <- factor(varImp$class, levels = c('Whole Model',"Deep Channels","Shallow Banks & Straits","Channel Heads & Slopes"))
+varImp$class <- factor(varImp$class, levels = c('Whole Model',"Deep Channels","Shallow Banks &\nStraits","Channel Heads &\nSlopes"))
 
-tiff('Output/QC_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300)                                                                                                
+# faceted by cluster
+
+tiff('Output/QC_VarImpPlot.tiff', width = 9, height = 3.5, units = 'in', res = 300, compression = 'lzw')                                                                                                
 p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   geom_point(stat = 'identity') +
   facet_grid(~class) +
@@ -217,6 +219,22 @@ p1 <- ggplot(varImp, aes(x = predictor, y = MeanDecreaseAccuracy)) +
   theme(axis.text.x = element_text(angle = 90), 
         text = element_text(size = 10)); p1
 dev.off()
+
+saveRDS(p1, 'Output/QC_VarImpPlot.rds')
+
+# Whole model only
+
+varImp$class2 <- factor(varImp$class, labels = c('NGSL',NA,NA,NA))
+p2 <- ggplot(varImp[varImp$class == 'Whole Model',], aes(x = predictor, y = MeanDecreaseAccuracy)) +
+  geom_point(stat = 'identity') +
+  facet_grid(~class2) +
+  theme_bw() +
+  coord_flip() +
+  labs(x = NULL, y = 'Mean Decrease in Accuracy') + 
+  theme(axis.text.x = element_text(angle = 90), 
+        text = element_text(size = 10)); p2
+
+saveRDS(p2, 'Output/QC_VarImpPlot_WM.rds')
 
 ####Highlighting areas of lower model certainty####
 
@@ -269,7 +287,8 @@ plot(uncertainty$correct ~ uncertainty$maxVC) #examine relationship between assi
 
 ####Distribution of important variables across cluster####
 
-my.colors <- c("#6a3d9a", "#1f78b4", "#ff7f00") # color scheme for clusters
+source('Code/SPERA_colour_palettes.R')
+my.colors <- QC.palette$assigned[1:3] # color scheme for clusters
 
 #boxplot for min ann bottom temp  
 box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
@@ -277,7 +296,7 @@ box_minT <- ggplot(RF.data, aes(x = cl,y = min_ann_BT, fill = cl)) +
   theme_classic() +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Avg min temperature (\u00B0C)'))) +
-  theme(axis.text.x = element_blank(), text = element_text(size = 12), 
+  theme(axis.text.x = element_blank(), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt')),
         axis.ticks.length = unit(2, 'mm')); box_minT
 
@@ -287,20 +306,48 @@ box_maxT <- ggplot(RF.data, aes(x = cl,y = max_ann_BT, fill = cl)) +
   theme_classic() +
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = expression(paste('Avg max temperature (\u00B0C)'))) +
-  scale_x_discrete(labels = c("Deep Channels", "Shallow Bays & Straits",
+  scale_x_discrete(labels = c("Deep Channels", "Shallow Banks & Straits",
                               "Channel Heads & Slopes")) +
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')); box_maxT
+
+#boxplot for DO
+box_DO <- ggplot(RF.data, aes(x = cl,y = dissox, fill = cl)) +
+  geom_boxplot(show.legend = F) +
+  theme_classic() +
+  scale_fill_manual(values = my.colors) +
+  labs(x = NULL, y = expression(DO~'('*mg~l^{-1}*')')) +
+  scale_x_discrete(labels = c("Deep Channels", "Shallow Banks & Straits",
+                              "Channel Heads & Slopes")) +
+  theme(axis.text.x = element_blank(), text = element_text(size = 14), 
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
+        axis.ticks.length = unit(2, 'mm')); box_DO
+
+#boxplot for BPI-20km
+box_bpi20 <- ggplot(RF.data, aes(x = cl,y = bpi20, fill = cl)) +
+  geom_boxplot(show.legend = F) +
+  theme_classic() +
+  scale_fill_manual(values = my.colors) +
+  labs(x = NULL, y = expression(paste('BPI (20 km)'))) +
+  scale_x_discrete(labels = c("Deep Channels", "Shallow Banks & Straits",
+                              "Channel Heads & Slopes")) +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1), text = element_text(size = 14), 
+        axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
+        axis.ticks.length = unit(2, 'mm')); box_bpi20
+
 
 #coerce ggplot objects to graphical objects
 g1 <- ggplotGrob(box_minT)
 g2 <- ggplotGrob(box_maxT)
+g3 <- ggplotGrob(box_DO)
+g4 <- ggplotGrob(box_bpi20)
 
 #Arrange grobs and plot in 2 X 2 array
 
-g <- rbind(g1, g2, size = 'first') #bind/align plot elements in 2 X 1 array
-
+c1 <- rbind(g1, g2, size = 'first') #bind/align plot elements of column 1
+c2 <- rbind(g3, g4, size = 'first') #bind/align plot elements of column 2
+g <- cbind(c1, c2, size = 'first') #bind/align plot elements of both rows
 
 tiff('Output/QC_EnvVariation.tiff', width = 8, height = 8, units = 'in', res = 300)
 plot(g)
