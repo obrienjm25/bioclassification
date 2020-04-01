@@ -18,41 +18,36 @@ invisible(lapply(pkgs, library, character.only = T))
 
 benthtree<-readRDS("Data/benthtree4km_Nfld.rds")
 SiteXSpecies<-read.csv("Data/ClusterData4km_Nfld.csv", stringsAsFactors = F, row.names = 1)
-
-#Examine internal cluster validity index, S_Dbw (Halkidi and Vazirgiannis 2001), as a function of cluster size
-#best cluster number is min value of index
 grid.pa.simp<-sim(SiteXSpecies,  method='simpson')
-ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, method = 'average',
-                      index = "sdbw", min.nc = 2, max.nc = 18)
-ClustValid$Best.nc #14 clusters is best, but anywhere 11+ with similar value
 
-ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
-p.SDbw <- ggplot(ClustValid.df) +
-  geom_point(aes(x = NC, y = Index)) +
-  labs(x = 'Number of cluster', y = 'S_Dbw index') +
-  geom_point(aes(x = NC[Index == min(Index)], y = min(Index), col = 'red')) +
-  guides(colour = 'none') +
-  theme_bw(); p.SDbw
+#Examine internal cluster validity index as a function of cluster size
+#calculate various CVI's for partititions with k=2-20 
 
-#Compare with different internal cluster validity index - CH index (Calinski and Harabasz 1974)
-#best cluster number is max value of index
+cvi <- c('ch', 'cindex', 'ptbiserial','db','silhouette')
+nclust <- c(2:20)
+vals <- list()
 
-ClustValid <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, method = 'average',
-                      index = "ch", min.nc = 2, max.nc = 18)
-ClustValid$Best.nc #2 clusters best
+for (i in cvi) {
+  
+  vals[[i]] <- NbClust(data = SiteXSpecies, diss = grid.pa.simp, distance = NULL, 
+                       method = 'average',index = i, min.nc = 2, max.nc = 20)$All.index
+  
+}
 
-#appear to be 3 sequential and progressively smaller peaks (Nested clusters?)
-ClustValid.df <- data.frame(NC = as.numeric(names(ClustValid$All.index)), Index = ClustValid$All.index)
-p.CH <- ggplot(ClustValid.df) +
-  geom_point(aes(x = NC, y = Index)) +
-  labs(x = 'Number of clusters', y = 'CH index') +
-  geom_point(aes(x = NC[1], y = Index[1], col = 'red')) +
-  guides(colour = 'none') +
-  theme_bw(); p.CH
+cvi.df <- data.frame(NC = rep(nclust, length(cvi)), Value = unlist(vals))
+cvi.df$Index <- gsub('[.][0-9]+','',row.names(cvi.df))
+p.cvi <- ggplot(cvi.df, aes(x = NC, y = Value)) +
+  geom_line(size = 1, col = 'blue3') +
+  geom_point() +
+  labs(x = 'Number of clusters', y = 'Index value') +
+  facet_wrap(~ Index, ncol = 1, scales = 'free_y')+
+  theme_bw(); p.cvi
 
-library(gridExtra)
+#2, 4, 6, 8 & 9 clusters all possible
 
-grid.arrange(p.SDbw, p.CH)
+saveRDS(p.cvi, 'Output/CVI_NL.rds')
+
+# ggsave(plot = p.cvi, "Output/CVI_NL.tiff", height = 4, width = 6, units = 'in', dpi = 300, compression = 'lzw')
 
 #Pinpoint cut-off value by examining number of sites assigned to top clusters and evenness among clusters
 #as a function of dissimilarity
@@ -112,10 +107,9 @@ tablea$Bsim100<-tablea$Bsim*100
 
 #Exploratory plots
 
-cutoff1<-0.371
-cutoff2<-0.410
-cutoff3<- 0.494
-cutoff4 <- 0.512
+cutoff1 <- 0.512
+cutoff2<- 0.567
+cutoff3 <- 0.632
 
 #Plot that shows ratio of assigned sites to variation (SD) in cluster size
 plot(tablea$Bsim,tablea$ratio, type="l", xlab="Bsim", ylab="Ratio of sites in top 10 clusters to cluster size SD")
@@ -149,9 +143,9 @@ ggplot(table2) +
   scale_fill_grey(start=0.95, end=0.3,labels=c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4", "Cluster 5", "Cluster 6", "Cluster 7", "Cluster 8", "Cluster 9", "Cluster 10"))+
   scale_x_continuous(expression(paste(beta["sim"]," cut-off")),expand = c(0, 0))+
   scale_y_continuous("Number of sites in each cluster", limits=c(0,5000), expand=c(0,0))+labs(fill="") +
-  geom_segment(aes(x = cutoff3-0.005, y = max(table2$value, na.rm=T), xend = cutoff3-0.005, yend = 0), linetype=2)+
-  geom_segment(aes(x = cutoff3+0.005, y = max(table2$value, na.rm=T), xend = cutoff3+0.005, yend = 0), linetype=2)+
-  geom_segment(aes(x = cutoff3-0.005, y = max(table2$value, na.rm=T), xend = cutoff3+0.005, yend = max(table2$value, na.rm=T)), linetype=2)
+  geom_segment(aes(x = cutoff1-0.005, y = max(table2$value, na.rm=T), xend = cutoff1-0.005, yend = 0), linetype=2)+
+  geom_segment(aes(x = cutoff1+0.005, y = max(table2$value, na.rm=T), xend = cutoff1+0.005, yend = 0), linetype=2)+
+  geom_segment(aes(x = cutoff1-0.005, y = max(table2$value, na.rm=T), xend = cutoff1+0.005, yend = max(table2$value, na.rm=T)), linetype=2)
  dev.off()
 
 ####
@@ -159,7 +153,7 @@ ggplot(table2) +
 # retained in those clusters for increasing Bsim cut-off values.
 #####
 #
- tiff("Output/CutOff_NSitesBySD_Nfld.tiff",
+tiff("Output/CutOff_NSitesBySD_Nfld.tiff",
      res=1200, width=84, height=84, units="mm", pointsize=8)
 plot(tablea$rowsums,tablea$SD, type="n",xlab="Number of sites in top 10 clusters", ylab="SD of number of sites in top 10 clusters")
 points(tablea$rowsums[tablea$Bsim100>=30&tablea$Bsim100<=39],tablea$SD[tablea$Bsim100>=30&tablea$Bsim100<=39], type="l",  lty=4, lwd=2)
@@ -168,9 +162,9 @@ points(tablea$rowsums[tablea$Bsim100>48&tablea$Bsim100<=59],tablea$SD[tablea$Bsi
 points(tablea$rowsums[tablea$Bsim100>58&tablea$Bsim100<=69],tablea$SD[tablea$Bsim100>58&tablea$Bsim100<=69], type="l",  lty=1, lwd=2)
 points(tablea$rowsums[tablea$Bsim100>68&tablea$Bsim100<=78],tablea$SD[tablea$Bsim100>68&tablea$Bsim100<=78], type="l",   lty=3, lwd=2)
 legend("topleft",legend=c((expression(paste(beta["sim"]," cut-off"))),"0.30 to 0.39","0.40 to 0.49","0.50 to 0.59", "0.60 to 0.69","0.70 to 0.78"),lty=c(0,4,1,5,1,3),lwd=c(0,2,1,1.5,2,2), bty="n")
-points(4907,608.4691,col="black", pch=22, cex=3)
+points(4908,626.3278,col="black", pch=22, cex=3)
 # points(tablea$rowsums[tablea$Bsim==cutoff1],tablea$SD[tablea$Bsim==cutoff1],col="black", pch=21, cex=3)
-text(4800,608.4691,col="black", labels=c("0.49"))
+text(4801,626.3278,col="black", labels=c("0.51"))
 # text(tablea$rowsums[tablea$Bsim==cutoff1]-130,tablea$SD[tablea$Bsim==cutoff1]+15,col="black", labels=c("0.37"))
  dev.off()
 
