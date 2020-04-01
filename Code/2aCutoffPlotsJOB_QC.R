@@ -36,15 +36,18 @@ for (i in cvi) {
 
 cvi.df <- data.frame(NC = rep(nclust, length(cvi)), Value = unlist(vals))
 cvi.df$Index <- gsub('[.][0-9]+','',row.names(cvi.df))
-p.cvi <- ggplot(cvi.df) +
-  geom_point(aes(x = NC, y = Value)) +
+p.cvi <- ggplot(cvi.df, aes(x = NC, y = Value)) +
+  geom_line(size = 1, col = 'blue3') +
+  geom_point() +
   labs(x = 'Number of clusters', y = 'Index value') +
-  facet_wrap(~ Index, scales = 'free_y')+
+  facet_wrap(~ Index, ncol = 1, scales = 'free_y')+
   theme_bw(); p.cvi
 
-#2, 7(6), 11, clusters all possible
+#2, 4, 7(6), 9, clusters all possible
 
-ggsave("Output/CVI_QC.tiff",p.cvi)
+saveRDS(p.cvi, 'Output/CVI_QC.rds')
+
+# ggsave(plot = p.cvi, "Output/CVI_QC.tiff", height = 4, width = 6, units = 'in', dpi = 300, compression = 'lzw')
 
 #Pinpoint cut-off value by examining number of sites assigned to top clusters and evenness among clusters
 #as a function of dissimilarity
