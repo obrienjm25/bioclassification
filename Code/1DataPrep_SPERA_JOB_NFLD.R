@@ -121,6 +121,7 @@ NL_SA <- erase(NL_SA,NAFO_rm)#mask study area polygon with 2G, 3M NAFO divisions
 
 #load polygon for Nfld study area
 NL_SA <- readOGR('Data/Shapefiles/NL_RVsurveyAgg.shp')
+#5628 sets lie within the study area bounderies (2228 spring, 3400 fall)
 
 #Calculate density of survey pts and avg distance to nearest neighbour in survey area
 
