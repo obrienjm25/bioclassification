@@ -372,21 +372,25 @@ freqCl <- bind_rows(colors[[2]][colors[[2]]$id %in% overlap, ],
 freqCl$Period <- recode(freqCl$Period, '1' = '2007-2011', '2'='2012-2016') #recode groups
 saveRDS(freqCl, 'Output/Maritimes_OverlappingSites_Assignment.rds')#save cluster assignments for overlapping grid cells
 freqCl <- freqCl %>% group_by(Period, cl) %>% 
-  dplyr::count(., sort = F) %>% bind_rows(.,data.frame(Period='2012-2016',cl='Slope',n=0))  
+  dplyr::count(., sort = F) %>% bind_rows(.,data.frame(Period='2012-2016',cl='Slope',n=0)) %>% 
+  mutate(cl = factor(cl, levels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF','WSS: Banks/Inner BoF')))
 
 #Plot
-my.colors <- c("#33a02c","#ff7f00","#6a3d9a", "#e6ab02","#1f78b4","#a6cee3")
+my.colors <- MAR.palette$assigned[c(3,4,5,6,1,2)] #color scheme
 names(my.colors) <- unique(freqCl$cl)
 
 p1 <- ggplot(freqCl) + 
   geom_bar(aes(x = cl, y = n, group = Period, fill = cl, alpha = Period, color = Period), stat = 'identity', position = position_dodge2(padding=0.1)) +
-  labs(x = NULL, y = 'Sites per cluster') +
+  labs(x = NULL, y = 'Number of sites') +
   theme_classic() +
   scale_alpha_manual(values = c(1,0.75)) + 
-  scale_fill_manual(name = 'Cluster', values = my.colors) +
-  theme(axis.text.x = element_text(angle = 50, hjust = 1), panel.border = element_rect(fill = NA, colour = 'black')) +
+  scale_fill_manual(name = 'Assemblage', values = my.colors) +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1),
+        text = element_text(size = 14),
+        panel.border = element_rect(fill = NA, colour = 'black')) +
   scale_color_manual(values = c('black','black'))
-p1
+
+ggsave(plot = p1, 'Output/Maritimes_splitComparison.tiff', width = 6, height = 4.5, units = 'in', dpi = 300, compression = 'lzw')
 
 ####Split Environmental Layers####
 
@@ -627,7 +631,7 @@ saveRDS(confusionHindcast, 'Output/ConfusionMatrixAllTimes.rds') #save matrix
 confusionHindcastpre2012 <- confusionMatrix(data = assignments$predicted[assignments$Period == '2007-2011'], 
                                             reference = assignments$observed[assignments$Period == '2007-2011'])
 saveRDS(confusionHindcastpre2012 , 'Output/ConfusionMatrixPre2012.rds') #save matrix
-#confusion matrix for 2007-2011 only (78.4 % accuracy)
+#confusion matrix for 2012-2016 only (78.4 % accuracy)
 confusionHindcastpost2012 <- confusionMatrix(data = assignments$predicted[assignments$Period == '2012-2016'], 
                                             reference = assignments$observed[assignments$Period == '2012-2016'])
 saveRDS(confusionHindcastpost2012, 'Output/ConfusionMatrixPost2012.rds') #save matrix
@@ -856,6 +860,8 @@ writeOGR(as(ClimateSensitive,'SpatialPolygonsDataFrame'), dsn = 'Output', layer 
 
 #Determine change in area of each group
 
+source('Code/SPERA_colour_palettes.R')
+
 present_cl <- raster('Output/Maritimes_PredClust_map.tif') #raster of present predicted cluster membership
 future_cl <- raster('Output/Maritimes_Forecast2075_map.tif') #raster of future predicted cluster membership under RCP 8.5
 
@@ -866,11 +872,12 @@ Cl_area <- data.frame(Cluster = c('Slope','Laurentian Channel/Shelf Break', 'ESS
   mutate(., area_change = area_future - area_present, #calculate change in area of each cluster
          perc_change = ((area_future - area_present)/area_present)*100, #percent change in area
          relative_area = (area_future/area_present)*100) #relative size of each cluster to present conditions
-Cl_area$Cluster <- factor(Cl_area$Cluster, levels = c('Slope', 'Laurentian Channel/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF','WSS: Banks/Inner BoF'))
+Cl_area$Cluster <- factor(Cl_area$Cluster, levels = Cl_area$Cluster[order(Cl_area$perc_change)])
 
-my.colors <- c('#e6ab02','#6a3d9a','#33a02c','#ff7f00', '#a6cee3','#1f78b4')
+my.colors <- MAR.palette$assigned[c(6,5,3,4,1,2)] #color scheme
+my.colors2 <- MAR.palette$assigned[c(5,4,3,6,1,2)] #color scheme
 
-tiff('Output/Maritimes_ChangeClusterArea.tiff', width = 8, height = 8, units = 'in', res = 300)
+tiff('Output/Maritimes_ChangeClusterArea.tiff', width = 8, height = 8, units = 'in', res = 300, compression = 'lzw')
 
 p1 <- ggplot(Cl_area, aes(x = Cluster, y = perc_change, fill = Cluster, color = Cluster)) +
   geom_bar(show.legend = F, stat = 'identity') +
@@ -878,11 +885,27 @@ p1 <- ggplot(Cl_area, aes(x = Cluster, y = perc_change, fill = Cluster, color = 
   scale_fill_manual(values = my.colors) +
   labs(x = NULL, y = 'Change in area (%)') +
   scale_x_discrete(labels = c('Slope','LC/Shelf Break','ESS','ESS: Banks','WSS/Outer BoF', 'WSS: Banks/Inner BoF')) +
-  theme(axis.text.x = element_text(angle = 45,hjust = 1), text = element_text(size = 12), 
+  theme(axis.text.x = element_text(angle = 45,hjust = 1), text = element_text(size = 16), 
         axis.title.y = element_text(margin = ggplot2::margin(0,12,0,12,'pt'), hjust = 0.5),
         axis.ticks.length = unit(2, 'mm')) +
   scale_color_manual(values = rep('black',6)); p1
 dev.off()
+
+# alternative format
+p2 <- ggplot(Cl_area, aes(x = Cluster, y = perc_change, fill = Cluster, color = Cluster)) +
+  geom_bar(show.legend = F, stat = 'identity') +
+  theme_classic() +
+  scale_fill_manual(values = my.colors2) +
+  labs(x = NULL, y = 'Change in area (%)') +
+  scale_x_discrete(labels = c('LC/Shelf Break','ESS Banks','ESS','Slope','WSS/Outer BoF', 'WSS Banks/Inner BoF')) +
+  coord_flip() +
+  theme(text = element_text(size = 16), 
+        axis.title.x = element_text(margin = ggplot2::margin(12,0,0,0,'pt'), hjust = 0.5),
+        axis.ticks.length = unit(2, 'mm')) +
+  scale_color_manual(values = rep('black',6)); p2
+
+saveRDS(p2, 'Output/Maritimes_ChangeClusterArea_flipped.rds')
+ggsave(p2, filename = 'Output/Maritimes_ChangeClusterArea_flipped.tiff', width = 8, height = 8, units = 'in', dpi = 300, compression = 'lzw')
 
 ####Predict classification under RCP 8.5 in 2075 w/out depth####
 
