@@ -13,10 +13,13 @@ library(maptools)
 canada <- getData("GADM", country = "CAN", level = 1)
 USA <- getData("GADM", country = "USA", level = 1)
 CanUS <- bind(canada, USA)
-ProvStat <- c("Nova Scotia", "New Brunswick", "Maine")
+ProvStat <- c("Nova Scotia", "New Brunswick", "Maine", "Qu\u{e9}bec")
 LandBordersMaritimes <- CanUS[CanUS$NAME_1 %in% ProvStat,]
 LandBordersMaritimes <- spTransform(LandBordersMaritimes, CRS("+proj=utm +zone=20 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"))
-writeOGR(LandBordersMaritimes, dsn = "Data/Shapefiles", layer = "LandBordersMaritimes", driver = "ESRI Shapefile")
+writeOGR(LandBordersMaritimes, dsn = "Data/Shapefiles", layer = "LandBordersMaritimes", driver = "ESRI Shapefile", overwrite_layer = T)
+LandBorders_cropped <- crop(LandBordersMaritimes, extent(c(-147090.6,1029071,4796509,5329882)))
+writeOGR(LandBorders_cropped, dsn = "Data/Shapefiles", layer = "Maritimes_prov_borders", driver = "ESRI Shapefile", overwrite_layer = T)
+
 
 #Get shapefiles to create polygon of gridded region
 MaritimeRegion <- readOGR("Data/Shapefiles/MaritimesPlanningArea.shp") #maritime planning region
